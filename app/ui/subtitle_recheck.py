@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
 from app.features.subtitles.recheck import plan_ranges, apply_candidates, overlaps
 from app.features.subtitles.model import validate_segments, subtitle_time
 from app.features.subtitles.editing import review_reasons
+from app.ui.project_history import project_action
 
 
 class SubtitleRecheck(QDialog):
@@ -249,6 +250,7 @@ class SubtitleRecheck(QDialog):
         else:
             w.pending_seek = (position,True)
 
+    @project_action
     def apply_selected(self):
         w = self.studio
         if self.running or self.candidates is None or w.subtitle_job.busy or not w.resolve_subtitle_edit():

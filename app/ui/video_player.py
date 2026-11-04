@@ -1,7 +1,7 @@
 from pathlib import Path
 from PySide6.QtCore import Qt, QUrl, Signal, QTimer, QElapsedTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoFrame
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QSlider, QPushButton
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QSlider, QPushButton, QSizePolicy
 from app.ui.caption_video import CaptionVideoView
 from app.features.subtitles.editing import active_text
 from app.ui.components import panel, label
@@ -24,6 +24,7 @@ class VideoPlayer(QWidget):
         self._sequence_clip = None
         self.source = None
         self.name_for_path = lambda path: Path(path).name
+        self.edit_name = ""
         self.ready = False
         self.subtitles = []
         self.show_subtitles = True
@@ -40,7 +41,15 @@ class VideoPlayer(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         frame, layout = panel()
         outer.addWidget(frame)
-        layout.addWidget(label("영상 미리보기 · 선택 영상 시간", "heading"))
+        title_row=QHBoxLayout()
+        self.status=label("미디어 없음","heading")
+        self.status.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.status.setWordWrap(False)
+        title_row.addWidget(self.status,1)
+        self.heading=label("영상 미리보기 · 선택 영상 시간","muted")
+        self.heading.setWordWrap(False)
+        title_row.addWidget(self.heading)
+        layout.addLayout(title_row)
         self.stack = QStackedWidget()
         self.empty = label("▷\n\n영상 파일을 불러오세요\nMP4 · MOV", "preview")
         self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -75,8 +84,6 @@ class VideoPlayer(QWidget):
         self.volume.setAccessibleName("재생 음량")
         controls.addWidget(self.volume)
         layout.addLayout(controls)
-        self.status = label("미디어 없음", "muted")
-        layout.addWidget(self.status)
         self.player = QMediaPlayer(self)
         self.audio_player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
@@ -180,7 +187,14 @@ class VideoPlayer(QWidget):
             self._position = position + self.video_offset
         self.render_position()
 
+    def refresh_title(self):
+        if self.ready and self.audio_player.error()==QMediaPlayer.Error.NoError:
+            source=self.player.source().toLocalFile() or str(self.source or "")
+            self.status.setText((self.edit_name+" · " if self.edit_name else "")+self.name_for_path(source))
+            self.status.setToolTip(source)
+
     def render_position(self):
+        self.refresh_title()
         if not self.seek.isSliderDown():
             self.seek.setValue(self._position)
         self.clock.setText(f"{timecode(self._position)} / {timecode(self.timeline_duration())}")

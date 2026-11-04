@@ -8,7 +8,7 @@ from app.storage.project_store import load_project
 
 
 class ProjectWorkspace:
-    SESSION_FIELDS=('subtitle_history','subtitle_redo','sequence_history','sequence_redo','active_edit_id','closed_sequence_ids')
+    SESSION_FIELDS=('subtitle_history','subtitle_redo','sequence_history','sequence_redo','active_edit_id','closed_sequence_ids','project_undo','project_redo')
 
     def init_workspace(self):
         self.documents=[]
@@ -160,6 +160,7 @@ class ProjectWorkspace:
     def sync_workspace_ui(self):
         if not hasattr(self,'documents') or self._workspace_loading:return
         self.render_organized_trees()
+        self.update_history_controls()
         if hasattr(self, "scene_search") and self.scene_search.isVisible():
             self.scene_search.refresh()
 

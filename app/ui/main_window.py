@@ -17,6 +17,7 @@ from app.ui.media_panel import MediaPanel
 from app.ui.video_player import VideoPlayer
 from app.ui.playback_keys import PlaybackKeys
 from app.ui.history_keys import HistoryKeys
+from app.ui.project_history import ProjectHistory, install_history_actions
 from app.ui.drop_import import VideoDropImport
 from app.ui.project_workspace import ProjectWorkspace
 from app.ui.project_picker import ProjectPicker
@@ -30,7 +31,7 @@ from app.ui.timeline_workflow import TimelineWorkflow
 from app.ui.edit_sequence_workflow import EditSequenceWorkflow
 from app.ui.clip_clipboard import ClipClipboardWorkflow
 
-class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
+class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
     def open_subtitle_recheck(self):
         selected_caption = self.subtitle_panel.editor.selected_index if not self.active_sequence() else -1
         if self.subtitle_job.busy or not self.resolve_subtitle_edit():
@@ -66,6 +67,8 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.project = Project()
+        self.project_undo=[]
+        self.project_redo=[]
         self.sequence_history = {}
         self.sequence_redo = {}
         self.closed_sequence_ids=set()
@@ -241,7 +244,7 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.timeline.scope.currentIndexChanged.connect(self.scope_changed)
         vertical.addWidget(self.timeline)
         vertical.setChildrenCollapsible(False)
-        vertical.setSizes([560, 270])
+        vertical.setSizes([460, 370])
         layout.addWidget(vertical, 1)
         menu = self.menuBar().addMenu("파일")
         for title, shortcut, callback in (
@@ -270,11 +273,12 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.timeline.canvas.clear_requested.connect(self.clear_workspace_selection)
         self.init_workspace()
         self.init_organizer()
+        self.init_project_history()
         close_project_action=QAction("현재 프로젝트 닫기",self)
         close_project_action.setShortcut(QKeySequence("Ctrl+W"))
         close_project_action.triggered.connect(self.close_current_project)
         menu.addAction(close_project_action)
-        self.timeline.undo.setToolTip("실행 취소 Ctrl+Z · 다시 실행 Ctrl+Shift+Z · 현재 영상의 자막/배치 작업")
+        self.timeline.undo.setToolTip("실행 취소 Ctrl+Z · 다시 실행 Ctrl+Shift+Z · 현재 프로젝트 작업")
         self.statusBar().showMessage("●  자동 생성 → 검수·수정 → 영상 위 표시 → SRT 출력")
 
     def export_edit_video(self):
@@ -410,8 +414,7 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.project.subtitles = {p: s for p, s in self.project.subtitles.items() if p in paths}
         self.project.subtitle_runs = {p: s for p, s in self.project.subtitle_runs.items() if p in paths}
         if self.preview.source and self.preview.ready:
-            self.preview.status.setText(self.media.display_name(str(self.preview.source)))
-            self.preview.status.setToolTip(str(self.preview.source))
+            self.preview.refresh_title()
         self.project.edit_sequences = [s for s in self.project.edit_sequences if sequence_sources(s)<=paths]
         if self.active_edit_id and self.active_sequence() is None:
             self.active_edit_id = None
@@ -480,6 +483,8 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.preview.status.setText("미디어 없음")
         self.preview.update_controls()
         self.active_edit_id = None
+        self.project_undo=[]
+        self.project_redo=[]
         self.closed_sequence_ids=set()
         self.sequence_history = {}
         self.sequence_redo = {}
@@ -551,6 +556,7 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
     def show_source_subtitles(self, select=-1, force=False):
         if self.render_edit_sequence():
             return
+        self.preview.edit_name=""
         self.preview.set_sequence_ranges(None)
         if hasattr(self,"video_export_action"):self.video_export_action.setEnabled(False)
         self.subtitle_panel.setEnabled(True)
@@ -588,6 +594,7 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
                 self.media.display_name(path) if path else "", duration, **placement)
             if self.timeline.scope.currentIndex() == 1:
                 self.refresh_sequence()
+        self.update_history_controls()
 
     def generate_subtitles(self, model, language):
         if not self.resolve_subtitle_edit():
@@ -647,6 +654,7 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.timeline.setEnabled(True)
         self.subtitle_panel.set_busy(False)
         self.update_subtitle_controls()
+        self.update_history_controls()
 
     def subtitle_terms_changed(self, text):
         self.project.subtitle_terms = text.strip()
@@ -776,6 +784,9 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.change_edit_history(True)
 
     def change_edit_history(self, redo):
+        if hasattr(self,"project_undo"):
+            self.change_project_history(redo)
+            return
         if self.active_sequence():
             self.change_sequence_history(redo)
             return
@@ -828,3 +839,6 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
             return False
         self.statusBar().showMessage(f"SRT 저장 완료 · {path}")
         return True
+
+
+install_history_actions(MainWindow)

@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt,QSignalBlocker,QPointF
 from PySide6.QtWidgets import QTreeWidgetItem,QInputDialog,QMenu,QApplication
 from PySide6.QtGui import QShortcut,QKeySequence
 from app.core.project import validate_display_name
+from app.ui.type_icons import type_icon
 from app.features.silence.sequence import (sequence_clips,sequence_layout,sequence_sources,combine_sequences,validate_sequence,insert_sources)
 
 
@@ -37,6 +38,13 @@ class OrganizerWorkflow:
             for path in paths:
                 if path not in previous and path not in present:
                     p.library_items.append(dict(id=uuid4().hex,source=path,name=self.media.names().get(path,Path(path).name),folder=None))
+        # The upper library contains one registration per original source.
+        unique=[];seen=set()
+        for row in p.library_items:
+            key=str(Path(row['source']).resolve()).casefold()
+            if key not in seen:
+                unique.append(row);seen.add(key)
+        p.library_items=unique
         new_names=self.media.names()
         for row in p.library_items:
             old=p.media_names.get(row['source'],Path(row['source']).name)
@@ -161,11 +169,13 @@ class OrganizerWorkflow:
                 for row in self.organized_references(area) or []:
                     item=QTreeWidgetItem(nodes.get(row.get('folder'),tree),[row['name'],'원본' if area=='library' else '자료'])
                     item.setData(0,role,('media',self.active_document_id,row['source'],row['id']) if area=='library' else ('asset',self.active_document_id,row['id']))
+                    item.setIcon(0,type_icon('original' if area=='library' else 'asset'))
                     item.setToolTip(0,row['source'])
                 if area=='edit':
                     for seq in self.project.edit_sequences:
                         item=QTreeWidgetItem(nodes.get(self.project.edit_locations.get(seq['id']),tree),[seq['name'],'조합' if seq.get('kind')=='composition' else '편집본'])
                         item.setData(0,role,('sequence',self.active_document_id,seq['id']))
+                        item.setIcon(0,type_icon('composition' if seq.get('kind')=='composition' else 'sequence'))
                         item.setToolTip(0,'독립 복사 조합: '+', '.join(seq.get('components',[])) if seq.get('kind')=='composition' else seq['name'])
                         font=item.font(0);font.setBold(seq['id']==self.active_edit_id);item.setFont(0,font)
                         if seq['id']==self.active_edit_id:item.setToolTip(0,'현재 편집 중: '+seq['name'])
@@ -262,6 +272,8 @@ class OrganizerWorkflow:
             sources=sequence_sources(row)
         else:
             if len(self.organized_references(area))>=10000:raise ValueError("자료는 최대 10000개입니다.")
+            if area=='library' and any(str(Path(r['source']).resolve()).casefold()==str(Path(row['source']).resolve()).casefold() for r in self.project.library_items or []):
+                return
             row.update(id=uuid4().hex,folder=folder)
             self.organized_references(area).append(row);sources={row['source']}
         paths=list(dict.fromkeys(self.media.paths()+list(sources)))
@@ -436,11 +448,15 @@ class OrganizerWorkflow:
             offsets={p:self.placement(p)['video'] for p in self.media.paths()}
             if seq:
                 from app.features.silence.sequence import splice_sequence
-                at=target if kind=='timeline' else sequence_layout(seq)[2]
+                at=sequence_layout(seq)[2]
                 candidate=splice_sequence(seq,parts,at,self.project.subtitles,offsets)
                 if seq.get('kind')!='composition' and all(v['kind']!='sequence' for v in flat):
                     candidate.pop('kind',None);candidate.pop('components',None)
                 self.open_edit_sequence(seq['id']);self.commit_sequence(candidate,'편집본 추가 · 독립 복사')
+                self.timeline.follow_playhead=True
+                if self.preview.ready:self.preview.seek_timeline(at)
+                else:self.pending_seek=(at,False)
+                self.timeline.set_position(at)
             else:
                 seq=combine_sequences(parts,self.project.subtitles,offsets,'조합 편집본' if any(v['kind']=='sequence' for v in flat) else '편집본 '+str(len(self.project.edit_sequences)+1))
                 if all(v['kind']!='sequence' for v in flat):seq.pop('kind',None);seq.pop('components',None)

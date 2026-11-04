@@ -496,7 +496,7 @@ class Timeline(QWidget):
         self.sequence_list.currentRowChanged.connect(self.sequence_tabs.setCurrentIndex)
         self.sequence_list.hide()
         self.sequence_tree=ProjectTree()
-        self.sequence_tree.setFixedWidth(210)
+        self.sequence_tree.setFixedWidth(260)
         sidebar.addWidget(self.sequence_tree,1)
         content.addLayout(sidebar)
         track_layout=QVBoxLayout()

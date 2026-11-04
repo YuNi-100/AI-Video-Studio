@@ -125,9 +125,10 @@ class EditSequenceWorkflow:
         self.subtitle_panel.setEnabled(False)
         self.export_action.setEnabled(False)
         if hasattr(self,"video_export_action"):self.video_export_action.setEnabled(bool(sequence_clips(seq)))
+        self.preview.edit_name=seq["name"]
         self.preview.set_sequence_clips(sequence_clips(seq))
         self.preview.set_subtitles(cues)
-        self.preview.status.setText(f"{seq['name']} · {self.media.display_name(seq['source'])}")
+        self.preview.refresh_title()
         canvas=self.timeline.canvas
         canvas.duration=duration
         canvas.blocks=blocks
@@ -159,6 +160,7 @@ class EditSequenceWorkflow:
         self.timeline.info.setText(f"자막 {len(cues)}개 · {sum(c['track']=='video' for c in sequence_clips(seq))}개 컷")
         self.timeline.update_scroll()
         canvas.update()
+        self.update_history_controls()
         return True
 
     def select_sequence_clip(self,track,index):
@@ -331,6 +333,9 @@ class EditSequenceWorkflow:
         self.commit_sequence(validate_sequence(dict(seq,clips=sequence_clips(seq),linked=checked)), '영상·음성 연결 변경')
 
     def change_sequence_history(self,redo):
+        if hasattr(self,"project_undo"):
+            self.change_project_history(redo)
+            return
         seq=self.active_sequence()
         if not seq:
             return

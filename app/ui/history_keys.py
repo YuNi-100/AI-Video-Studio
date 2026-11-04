@@ -1,7 +1,7 @@
 """Undo/redo keys scoped to this window, with native text buffers kept separate."""
 import weakref
 from PySide6.QtCore import QObject, QEvent, Qt
-from PySide6.QtWidgets import QApplication, QLineEdit, QTextEdit, QPlainTextEdit
+from PySide6.QtWidgets import QApplication, QLineEdit, QTextEdit, QPlainTextEdit, QMessageBox, QFileDialog, QInputDialog
 
 
 class HistoryKeys(QObject):
@@ -14,9 +14,13 @@ class HistoryKeys(QObject):
         if event.type() not in (QEvent.Type.ShortcutOverride,QEvent.Type.KeyPress):
             return False
         window = self.window()
-        if window is None or not window.isVisible() or QApplication.activeWindow() is not window:
+        if window is None or not window.isVisible():
             return False
-        if QApplication.activeModalWidget() or QApplication.activePopupWidget():
+        active=QApplication.activeWindow()
+        node=active
+        while node is not None and node is not window:
+            node=node.parentWidget()
+        if node is None or isinstance(active,(QMessageBox,QFileDialog,QInputDialog)) or QApplication.activePopupWidget():
             return False
         if event.key() != Qt.Key.Key_Z:
             return False
@@ -34,9 +38,8 @@ class HistoryKeys(QObject):
         if event.type() == QEvent.Type.ShortcutOverride or event.isAutoRepeat():
             return True
         redo = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
-        if text is not None:
-            if not text.isReadOnly():
-                text.redo() if redo else text.undo()
+        if text is not None and not text.isReadOnly():
+            text.redo() if redo else text.undo()
         elif redo:
             window.redo_subtitle()
         else:

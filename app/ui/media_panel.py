@@ -82,6 +82,7 @@ class MediaPanel(QWidget):
         actions.addWidget(self.relink_button)
         actions.addWidget(self.remove_button)
         layout.addLayout(actions)
+        self.remove_button.hide()
         self.remove_shortcut = QShortcut(QKeySequence("Delete"), self.listing)
         self.remove_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
         self.remove_shortcut.activated.connect(self.remove_selected)

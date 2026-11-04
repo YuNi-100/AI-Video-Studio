@@ -132,6 +132,8 @@ class WorkspaceTests(unittest.TestCase):
         second_seq=deepcopy(w.active_sequence())
         self.assertTrue(w.activate_document(self.first));self.wait(lambda:w.preview.ready)
         self.assertEqual(w.active_sequence(),first_seq)
+        w.undo_subtitle()  # Last project action was renaming, before the cut deletion.
+        self.assertEqual(len(sequence_clips(w.active_sequence())),2)
         w.undo_subtitle();self.assertEqual(len(sequence_clips(w.active_sequence())),4)
         self.assertTrue(w.dirty)
         self.assertTrue(w.activate_document(second));self.wait(lambda:w.preview.ready)
@@ -190,7 +192,10 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(len(sequence_clips(w.active_sequence())),8)
         w.undo_subtitle()
         self.assertEqual(w.preview.timeline_duration(),6000)
+        self.assertNotIn(B,w.media.paths())
+        w.redo_subtitle()
         self.assertIn(B,w.media.paths())
+        self.assertEqual(w.preview.timeline_duration(),9000)
     def test_mixed_source_playback_switch_and_original_return(self):
         w=self.w
         self.assertTrue(w.handle_media_drop([B,A],w.timeline.sequence_tabs,QPointF(w.timeline.sequence_tabs.width()-2,10)))

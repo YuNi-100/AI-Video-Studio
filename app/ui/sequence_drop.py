@@ -18,6 +18,8 @@ class SequenceDropWorkflow:
         if watched is canvas or canvas.isAncestorOf(watched):
             point=canvas.mapFrom(watched,point)
             return 'timeline',max(0,min(canvas.duration,canvas.value_at(point.x())))
+        if watched is self.timeline or self.timeline.isAncestorOf(watched):
+            return 'timeline',canvas.duration
         return 'media',None
 
     def source_items(self,paths):

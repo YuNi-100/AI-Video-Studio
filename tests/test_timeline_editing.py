@@ -148,14 +148,14 @@ class TimelineTests(unittest.TestCase):
         row=w.project.subtitles[A][0]
         self.assertEqual(round((row['end']-row['start'])*1000),100)
         w.undo_subtitle()
-        count=len(w.subtitle_history[A])
+        count=len(w.project_undo)
         def x(ms):return round(95+ms/c.span*(c.width()-107))
         QTest.mousePress(c,Qt.MouseButton.LeftButton,pos=QPoint(x(500),90))
         QTest.mouseMove(c,QPoint(x(800),90),25)
         QTest.keyClick(c,Qt.Key.Key_Escape)
         QTest.mouseRelease(c,Qt.MouseButton.LeftButton,pos=QPoint(x(800),90))
         self.assertEqual(w.project.subtitles[A][0]['start'],.5)
-        self.assertEqual(len(w.subtitle_history[A]),count)
+        self.assertEqual(len(w.project_undo),count)
 
     def test_resize_combined_maps_to_source_and_keeps_other_clip(self):
         w=self.w; w.timeline.scope.setCurrentIndex(1)

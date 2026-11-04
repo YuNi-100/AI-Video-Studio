@@ -49,12 +49,12 @@ class ResizeClickTests(unittest.TestCase):
                 self.assertEqual(window.media.listing.currentItem().text(), "창 축소 확인")
                 remove = window.media.remove_button
                 self.assertTrue(window.media.relink_button.isHidden())
-                spy = QSignalSpy(remove.clicked)
-                mapped = remove.mapTo(window, remove.rect().center())
-                self.assertIs(window.childAt(mapped), remove)
-                QTest.mouseClick(window.windowHandle(), Qt.MouseButton.LeftButton, pos=mapped)
-                self.assertEqual(spy.count(), 1)
+                self.assertTrue(remove.isHidden())
+                listing.setFocus()
+                QTest.keyClick(listing, Qt.Key.Key_Delete)
                 self.assertEqual(window.media.paths(), [fixture])
+                QTest.keyClick(listing, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+                self.assertEqual(window.media.paths(), [fixture, other])
         finally:
             window.dirty = False
             window.project_name.setText(window.project.name)

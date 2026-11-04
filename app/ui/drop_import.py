@@ -11,6 +11,9 @@ class VideoDropImport(QObject):
         super().__init__(window)
         self.window = weakref.ref(window)
         window.setAcceptDrops(True)
+        # Let Qt deliver drops to the actual timeline instead of the main window.
+        for target in (window.timeline,window.timeline.canvas,window.timeline.hint):
+            target.setAcceptDrops(True)
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, watched, event):

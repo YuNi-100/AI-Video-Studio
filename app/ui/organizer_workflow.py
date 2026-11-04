@@ -3,7 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 from PySide6.QtCore import Qt,QSignalBlocker,QPointF
-from PySide6.QtWidgets import QTreeWidgetItem,QInputDialog,QMenu
+from PySide6.QtWidgets import QTreeWidgetItem,QInputDialog,QMenu,QApplication
 from PySide6.QtGui import QShortcut,QKeySequence
 from app.core.project import validate_display_name
 from app.features.silence.sequence import (sequence_clips,sequence_layout,sequence_sources,combine_sequences,validate_sequence,insert_sources)
@@ -122,11 +122,24 @@ class OrganizerWorkflow:
         if self.active_edit_id==key and self.timeline.sequence_tabs.currentIndex()==index:return
         if self.timeline.sequence_tabs.currentIndex()==index:self.select_edit_sequence(index)
         else:self.timeline.sequence_tabs.setCurrentIndex(index)
+        self.focus_active_sequence_in_list()
+
+    def focus_active_sequence_in_list(self):
+        """Explicit view changes select the actual opened edit, including refusals."""
         tree=self.timeline.sequence_tree
-        item=next((r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive) if r.data(0,Qt.ItemDataRole.UserRole)==('sequence',self.active_document_id,key)),None)
-        if item:
-            tree.clearSelection();tree.setCurrentItem(item)
-            tree.scrollToItem(item.parent() or item,tree.ScrollHint.PositionAtTop)
+        item=next((r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive)
+                   if r.data(0,Qt.ItemDataRole.UserRole)==('sequence',self.active_document_id,self.active_edit_id)),None)
+        with QSignalBlocker(tree):
+            tree.clearSelection()
+            tree.setCurrentItem(item)
+            if item:
+                parent=item.parent()
+                while parent:
+                    parent.setExpanded(True)
+                    tree.disclosure(parent,True)
+                    parent=parent.parent()
+                item.setSelected(True)
+                tree.scrollToItem(item)
 
     def render_organized_trees(self):
         self.snapshot_document()
@@ -154,6 +167,8 @@ class OrganizerWorkflow:
                         item=QTreeWidgetItem(nodes.get(self.project.edit_locations.get(seq['id']),tree),[seq['name'],'조합' if seq.get('kind')=='composition' else '편집본'])
                         item.setData(0,role,('sequence',self.active_document_id,seq['id']))
                         item.setToolTip(0,'독립 복사 조합: '+', '.join(seq.get('components',[])) if seq.get('kind')=='composition' else seq['name'])
+                        font=item.font(0);font.setBold(seq['id']==self.active_edit_id);item.setFont(0,font)
+                        if seq['id']==self.active_edit_id:item.setToolTip(0,'현재 편집 중: '+seq['name'])
                 active=None
                 for item in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive):
                     data=item.data(0,role)
@@ -173,6 +188,8 @@ class OrganizerWorkflow:
 
     def organized_clicked(self,item,area):
         data=item.data(0,Qt.ItemDataRole.UserRole)
+        if area=='edit' and QApplication.keyboardModifiers() & (Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.ShiftModifier):
+            return
         if data[0]=='sequence':self.open_edit_sequence(data[2])
         elif data[0] in ('media','asset'):
             record=self.record_for(data)

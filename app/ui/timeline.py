@@ -1,6 +1,6 @@
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSignalBlocker
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF, QBrush
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSlider, QScrollBar, QCheckBox, QComboBox, QPushButton, QTabBar, QToolButton, QListWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSlider, QScrollBar, QCheckBox, QComboBox, QPushButton, QTabBar, QToolButton, QListWidget, QSizePolicy
 from app.ui.components import panel, label
 from app.core.media import timecode
 from app.ui.project_tree import ProjectTree
@@ -464,6 +464,10 @@ class Timeline(QWidget):
         bar.addWidget(self.delete_button)
         self.split_button.hide()
         self.delete_button.hide()
+        self.current_edit=label('원본 보기','muted')
+        self.current_edit.setAccessibleName('현재 타임라인 편집 대상')
+        self.current_edit.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        bar.addWidget(self.current_edit,1)
         bar.addStretch()
         bar.addWidget(label("확대", "muted"))
         self.zoom = QSlider(Qt.Orientation.Horizontal)
@@ -519,6 +523,8 @@ class Timeline(QWidget):
         self.sequence_tabs.setTabButton(index,QTabBar.ButtonPosition.RightSide,button)
 
     def set_source(self, duration, segments, name, source_duration=None, video=0, audio=0, linked=True):
+        self.current_edit.setText('원본 보기'+(' · '+name if name else ''))
+        self.current_edit.setToolTip(self.current_edit.text())
         self.canvas.duration = duration
         self.canvas.segments = segments
         self.canvas.name = name

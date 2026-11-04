@@ -199,6 +199,8 @@ class MainWindow(ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow,
         self.timeline.canvas.copy_requested.connect(self.copy_timeline_sets)
         self.timeline.canvas.paste_requested.connect(self.paste_timeline_sets)
         self.timeline.sequence_tabs.currentChanged.connect(self.select_edit_sequence)
+        self.timeline.sequence_tabs.tabBarClicked.connect(lambda i:self.focus_active_sequence_in_list()
+            if not self.subtitle_job.busy and self.timeline.sequence_tabs.tabData(i)==self.active_edit_id else None)
         self.timeline.sequence_tabs.tabCloseRequested.connect(self.close_edit_sequence)
         self.timeline.begin_edit.clicked.connect(self.begin_timeline_edit)
         self.timeline.canvas.edit_requested.connect(self.begin_timeline_edit)

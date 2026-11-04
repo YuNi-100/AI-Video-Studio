@@ -26,6 +26,8 @@ class EditSequenceWorkflow:
                     tabs.setTabToolTip(i,seq['source'])
                 tabs.setCurrentIndex(next((i for i,(key,_) in enumerate(desired) if key==self.active_edit_id),0))
         index=next((i for i,(key,_) in enumerate(desired) if key==self.active_edit_id),0)
+        with QSignalBlocker(tabs):
+            tabs.setCurrentIndex(index)
         listing=self.timeline.sequence_list
         with QSignalBlocker(listing):
             listing.clear()
@@ -36,6 +38,9 @@ class EditSequenceWorkflow:
                 listing.item(listing.count()-1).setToolTip(seq['source'])
             listing.setCurrentRow(index)
         tabs.setVisible(bool(self.project.edit_sequences))
+        seq=self.active_sequence()
+        self.timeline.current_edit.setText('현재 편집 중: '+seq['name'] if seq else '원본 보기')
+        self.timeline.current_edit.setToolTip(self.timeline.current_edit.text())
         self.sync_workspace_ui()
 
     def create_edit_sequence(self, source, ranges, duration):
@@ -64,12 +69,14 @@ class EditSequenceWorkflow:
             with QSignalBlocker(tabs):
                 tabs.setCurrentIndex(next((i for i in range(tabs.count()) if tabs.tabData(i)==old),0))
             self.sync_sequence_tabs()
+            self.focus_active_sequence_in_list()
             self.statusBar().showMessage('시퀀스 원본을 찾을 수 없습니다. 미디어 목록에서 파일 찾기를 사용하세요.')
             return
         if self.subtitle_job.busy or not self.resolve_subtitle_edit():
             with QSignalBlocker(tabs):
                 tabs.setCurrentIndex(next((i for i in range(tabs.count()) if tabs.tabData(i)==old),0))
             self.sync_sequence_tabs()
+            self.focus_active_sequence_in_list()
             return
         self.abort_timeline_scrub()
         self.pending_seek=None
@@ -93,6 +100,7 @@ class EditSequenceWorkflow:
             finally:
                 self._opening_edit_sequence=False
         self.show_source_subtitles(force=True)
+        self.focus_active_sequence_in_list()
         if self.preview.ready:
             self.preview.seek_timeline(0)
         self.timeline.set_position(0)

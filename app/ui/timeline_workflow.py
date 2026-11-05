@@ -265,7 +265,23 @@ class TimelineWorkflow:
             self.preview.toggle_play()
         self._scrub_timer.start()
 
+    def select_playhead_video(self, position):
+        seq=self.active_sequence()
+        if not seq:return
+        from app.features.silence.sequence import sequence_clips
+        canvas=self.timeline.canvas;clips=sequence_clips(seq)
+        index=next((i for i,c in enumerate(clips) if c['track']=='video' and round(c['at']*1000)<=position<round((c['at']+c['end']-c['start'])*1000)),None)
+        canvas.selected_gap=None;canvas.individual_selection=False
+        canvas.selected_clip=index;canvas.selected_track='video' if index is not None else None
+        group=clips[index]['group'] if index is not None else None
+        canvas.selected_keys={i for i,c in enumerate(clips) if i==index or (group is not None and seq.get('linked',True) and c['group']==group)}
+        canvas.selected_subtitles={i for i,row in enumerate(canvas.segments) if group is not None and row.get('owner')==group}
+        self.timeline.split_button.setEnabled(index is not None)
+        self.timeline.delete_button.setEnabled(index is not None)
+        canvas.update()
+
     def request_timeline_seek(self, position):
+        self.select_playhead_video(position)
         if self._scrubbing:
             self._scrub_target = position
             self.timeline.set_position(position)

@@ -238,6 +238,7 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.timeline.canvas.scrub_started.connect(self.begin_timeline_scrub)
         self.timeline.canvas.scrub_finished.connect(self.end_timeline_scrub)
         self.timeline.canvas.seek_requested.connect(self.request_timeline_seek)
+        self.timeline.canvas.clip_seek_requested.connect(self.seek_transport)
         self.timeline.canvas.subtitle_selected.connect(self.timeline_select)
         self.timeline.canvas.block_moved.connect(self.move_timeline_block)
         self.timeline.canvas.subtitle_resized.connect(self.resize_timeline_subtitle)

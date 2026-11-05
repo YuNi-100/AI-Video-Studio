@@ -48,7 +48,7 @@ class PlaybackKeys(QObject):
         event.accept()
         if event.type() == QEvent.Type.ShortcutOverride:
             return True
-        if event.isAutoRepeat():
+        if event.isAutoRepeat() and event.key()==Qt.Key.Key_Space:
             return True
         preview = self.window.preview
         if event.key() == Qt.Key.Key_Space:
@@ -56,5 +56,6 @@ class PlaybackKeys(QObject):
         elif preview.player.isSeekable():
             step=5000 if event.modifiers()==Qt.KeyboardModifier.ShiftModifier else 1000
             delta = -step if event.key() == Qt.Key.Key_Left else step
-            self.window.seek_transport(max(0, min(self.window.transport_duration_value(), self.window.transport_position_value() + delta)))
+            position=max(0, min(self.window.transport_duration_value(), self.window.transport_position_value() + delta))
+            self.window.request_timeline_seek(position) if self.window.timeline_focus.active else self.window.seek_transport(position)
         return True

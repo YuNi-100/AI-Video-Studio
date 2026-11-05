@@ -76,7 +76,7 @@ def delete_items(seq,indices,caption_indices=(),ripple=False):
 def gap_at(seq,position,track):
     tracks={'video','audio'} if seq.get('linked',True) else {track}
     occupied=[(c['at'],c['at']+c['end']-c['start']) for c in sequence_clips(seq) if c['track'] in tracks]
-    if 'video' in tracks:occupied.extend((r['start'],r['end']) for r in seq.get('timeline_captions',[]))
+    if 'video' in tracks or track=='subtitle':occupied.extend((r['start'],r['end']) for r in seq.get('timeline_captions',[]))
     previous=0
     for a,b in union(occupied):
         if previous<=position<a:return round(previous,3),round(a,3)
@@ -89,6 +89,13 @@ def close_gap(seq,start,end,track):
     if found is None or abs(found[0]-start)>.001 or abs(found[1]-end)>.001:
         raise ValueError('선택한 빈칸이 바뀌었습니다. 빈칸을 다시 선택하세요.')
     tracks={'video','audio'} if seq.get('linked',True) else {track}
+    if tracks=={'subtitle'}:
+        rows=deepcopy(seq.get('timeline_captions',[]))
+        for row in rows:
+            if row['start']>=end-.000001:
+                row.update(start=round(row['start']-(end-start),3),end=round(row['end']-(end-start),3))
+                if row.get('owner'):row.pop('owner');row['detached']=True
+        return finish(seq,sequence_clips(seq),rows)
     return shift_after_gaps(seq,sequence_clips(seq),seq.get('timeline_captions',[]),[(start,end)],tracks)
 
 

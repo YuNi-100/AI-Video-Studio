@@ -31,7 +31,7 @@ class TimelineFocus(QObject):
         if global_point is None:
             global_point=widget.mapToGlobal(widget.rect().center())
         local=timeline.mapFromGlobal(global_point)
-        return timeline.rect().contains(local) and local.x()>=timeline.canvas.mapTo(timeline,QPoint(0,0)).x()
+        return timeline.rect().contains(local) and local.x()>=timeline.editing_panel.mapTo(timeline,QPoint(0,0)).x()
 
     @staticmethod
     def text_input(widget):

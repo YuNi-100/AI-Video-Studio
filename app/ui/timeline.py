@@ -19,6 +19,7 @@ class TrackCanvas(QWidget):
     ripple_delete_requested = Signal()
     gap_selected = Signal(str,int,int)
     seek_requested = Signal(int)
+    clip_seek_requested = Signal(int)
     subtitle_selected = Signal(int)
     block_moved = Signal(str, int, int)
     subtitle_resized = Signal(int, int, int)
@@ -105,7 +106,7 @@ class TrackCanvas(QWidget):
         overwrite_preview=bool(self.sequence_view and self.drag and self.drag[5]=='move' and self.drag[4] and not self._ripple and not self.snap_insert)
         if self.selected_gap is not None:
             track,a,b=self.selected_gap
-            y=top if self.gap_linked or track=='video' else top+2*row
+            y=top if self.gap_linked or track=='video' else top+(1 if track=='subtitle' else 2)*row
             height=row*3 if self.gap_linked else row
             rect=QRectF(x_at(a),y+3,max(1,x_at(b)-x_at(a)),height-7)
             p.fillRect(rect,QColor(139,212,203,40))
@@ -360,7 +361,7 @@ class TrackCanvas(QWidget):
             else:
                 value=self.value_at(event.position().x())
                 row=int((event.position().y()-30)//43)
-                track='video' if row==0 else 'audio' if row==2 else None
+                track='video' if row==0 else 'subtitle' if row==1 else 'audio' if row==2 else None
                 gap=self.gap_probe(value,track) if self.sequence_view and track and self.gap_probe and not self._selection_additive else None
                 if gap:
                     self.gap_selected.emit(track,*gap)
@@ -384,7 +385,7 @@ class TrackCanvas(QWidget):
             if delta:
                 self.clip_edited.emit(track,key,mode,delta,self._ripple or bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier))
             else:
-                self.seek_requested.emit(min(self.duration,self.value_at(event.position().x())))
+                self.clip_seek_requested.emit(min(self.duration,self.value_at(event.position().x())))
             self.unsetCursor()
             self.update()
             return
@@ -485,40 +486,43 @@ class Timeline(QWidget):
         self.later.hide()
         self.earlier.setToolTip("선택 영상을 미디어 목록에서 앞으로 이동")
         self.later.setToolTip("선택 영상을 미디어 목록에서 뒤로 이동")
+        editbar=QHBoxLayout()
+        editbar.setSpacing(10)
         self.link = QCheckBox("영상·음성 연결")
         self.link.setChecked(True)
-        bar.addWidget(self.link)
+        editbar.addWidget(self.link)
         self.begin_edit=QPushButton("편집 시작")
         self.begin_edit.setToolTip("원본 구성을 복사해 새 편집본에서 편집합니다. Ctrl+K / Shift 드래그로도 시작할 수 있습니다.")
-        bar.addWidget(self.begin_edit)
+        editbar.addWidget(self.begin_edit)
         self.undo = QPushButton("실행 취소")
-        bar.addWidget(self.undo)
+        editbar.addWidget(self.undo)
         self.split_button=QPushButton('분할')
         self.split_button.setToolTip('선택 컷을 재생 위치에서 분할 · 타임라인에서 Ctrl+K')
         self.delete_button=QPushButton('삭제')
         self.delete_button.setToolTip('선택 컷만 삭제 · Delete/Backspace · Alt+Backspace: 빈틈 없이 삭제')
-        bar.addWidget(self.split_button)
-        bar.addWidget(self.delete_button)
+        editbar.addWidget(self.split_button)
+        editbar.addWidget(self.delete_button)
         self.split_button.hide()
         self.delete_button.hide()
         self.current_edit=label('원본 보기','muted')
         self.current_edit.setAccessibleName('현재 타임라인 편집 대상')
         self.current_edit.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
-        bar.addWidget(self.current_edit,1)
-        bar.addStretch()
-        bar.addWidget(label("확대", "muted"))
+        editbar.addWidget(self.current_edit,1)
+        editbar.addStretch()
+        editbar.addWidget(label("확대", "muted"))
         self.zoom = QSlider(Qt.Orientation.Horizontal)
         self.zoom.setRange(50, 10000)
         self.zoom.setValue(100)
         self.zoom.setFixedWidth(120)
         self.zoom.setAccessibleName("타임라인 확대")
-        bar.addWidget(self.zoom)
-        layout.addLayout(bar)
+        editbar.addWidget(self.zoom)
         self.follow_playhead = True
         self.canvas = TrackCanvas()
         self.canvas.seek_requested.connect(lambda _:setattr(self,"follow_playhead",True))
+        self.canvas.clip_seek_requested.connect(lambda _:setattr(self,"follow_playhead",True))
         content=QHBoxLayout()
         sidebar=QVBoxLayout()
+        sidebar.addLayout(bar)
         bin_header=QHBoxLayout()
         bin_header.addWidget(label('편집본 목록', 'heading'))
         self.new_folder=QPushButton('새 폴더')
@@ -536,10 +540,13 @@ class Timeline(QWidget):
         self.sequence_tree.setFixedWidth(260)
         sidebar.addWidget(self.sequence_tree,1)
         content.addLayout(sidebar)
-        track_layout=QVBoxLayout()
-        track_layout.setContentsMargins(0,0,0,0)
+        self.editing_panel=QWidget()
+        track_layout=QVBoxLayout(self.editing_panel)
+        track_layout.setContentsMargins(12,12,12,10)
+        track_layout.setSpacing(10)
+        track_layout.addLayout(editbar)
         track_layout.addWidget(self.canvas)
-        content.addLayout(track_layout,1)
+        content.addWidget(self.editing_panel,1)
         layout.addLayout(content,1)
         self.scroll = QScrollBar(Qt.Orientation.Horizontal)
         self.scroll.setAccessibleName("타임라인 가로 이동")
@@ -559,8 +566,8 @@ class Timeline(QWidget):
 
     def update_keyboard_border(self):
         if not hasattr(self,'keyboard_border'):return
-        left=max(0,self.canvas.mapTo(self,QPoint(0,0)).x()-4)
-        self.keyboard_border.setGeometry(left,8,max(1,self.width()-left-7),max(1,self.height()-16))
+        origin=self.editing_panel.mapTo(self,QPoint(0,0))
+        self.keyboard_border.setGeometry(origin.x(),origin.y(),self.editing_panel.width(),self.editing_panel.height())
         self.keyboard_border.setVisible(self.keyboard_active)
         if self.keyboard_active:self.keyboard_border.raise_()
 

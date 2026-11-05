@@ -43,7 +43,8 @@ class HistoryKeyTests(unittest.TestCase):
         self.assertEqual(w.subtitle_history,{})
         self.assertEqual(w.subtitle_redo,{})
     def test_text_undo_redo_does_not_change_applied_project(self):
-        w=self.w; e=w.subtitle_panel.editor
+        w=self.w;w.create_edit_sequence(SOURCE,[(0,7)],7.188);w.select_subtitle(0)
+        e=w.subtitle_panel.editor
         w.subtitle_panel.tabs.setCurrentIndex(1); e.text.setFocus()
         e.text.moveCursor(__import__('PySide6.QtGui',fromlist=['QTextCursor']).QTextCursor.MoveOperation.End)
         QTest.keyClicks(e.text,' plus')

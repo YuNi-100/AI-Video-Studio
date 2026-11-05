@@ -28,7 +28,8 @@ class SubtitleRecheck(QDialog):
         layout = QVBoxLayout(self)
         self.source_label = QLabel()
         layout.addWidget(self.source_label)
-        layout.addWidget(QLabel('원본 영상 시간 기준 · 앞뒤 2초를 함께 듣고 최대 30초 단위로 비교합니다. 새 후보도 검수가 필요합니다.'))
+        self.basis_label=QLabel('작업본 시간 기준 · 앞뒤 2초를 함께 듣고 최대 30초 단위로 비교합니다. 새 후보도 검수가 필요합니다.')
+        layout.addWidget(self.basis_label)
         bar = QHBoxLayout()
         self.scope = QComboBox()
         self.scope.addItems(['전체 구간','지정 구간','의심 구간만'])
@@ -95,17 +96,21 @@ class SubtitleRecheck(QDialog):
     def prepare(self):
         w = self.studio
         self.project_ref = w.project
-        self.source = w.media.selected_path()
+        seq=w.active_sequence()
+        self.sequence_id=seq["id"] if seq else None
+        self.sequence_snapshot=deepcopy(seq)
+        self.work=None
+        self.source = seq["source"] if seq else w.media.selected_path()
         stat = Path(self.source).stat()
         self.source_stamp = (stat.st_size,stat.st_mtime_ns)
-        self.snapshot = deepcopy(w.project.subtitles.get(self.source,[]))
-        self.offset = w.placement(self.source)['video']
-        self.duration = w.preview.player.duration()/1000
+        self.snapshot = deepcopy(w.timeline.canvas.segments if seq else w.project.subtitles.get(self.source,[]))
+        self.offset = 0 if seq else w.placement(self.source)['video']
+        self.duration = w.preview.timeline_duration()/1000 if seq else w.preview.player.duration()/1000
         self.model = w.subtitle_panel.model.currentData()
         self.language = w.subtitle_panel.language.currentData()
         self.terms = w.subtitle_panel.terms.text()
         self.vad = w.subtitle_panel.skip_silence.isChecked()
-        self.source_label.setText('재검토 대상: '+w.media.display_name(self.source))
+        self.source_label.setText('재검토 대상: '+(seq['name'] if seq else w.media.display_name(self.source)))
         self.settings.setText(f'{self.model} · {self.language} · 기본 설정 / 용어 힌트 제외 후보 비교 · 적용 후 Ctrl+Z로 되돌리기')
         self.end.setValue(self.duration)
         self.start.setValue(0)
@@ -132,6 +137,8 @@ class SubtitleRecheck(QDialog):
                 return False
         except OSError:
             return False
+        if self.sequence_id:
+            return w.project is self.project_ref and w.active_edit_id==self.sequence_id and w.active_sequence()==self.sequence_snapshot
         return (w.project is self.project_ref and self.source in w.media.paths()
             and w.project.subtitles.get(self.source,[]) == self.snapshot
             and w.placement(self.source)['video'] == self.offset)
@@ -163,8 +170,12 @@ class SubtitleRecheck(QDialog):
             w.media.setEnabled(False)
             w.timeline.setEnabled(False)
             self.status.setText('재검토 중 · 기본 후보와 힌트 제외 후보를 만듭니다. 기존 자막은 유지됩니다.')
+            module='app.features.subtitles.recheck_worker';extra=['--request',str(self.request_path)]
+            if self.sequence_id:
+                self.work=tempfile.TemporaryDirectory(prefix='studio-work-recheck-')
+                module='app.features.subtitles.sequence_worker';extra+=w.work_job_arguments(self.sequence_snapshot,self.work)
             if not w.subtitle_job.start(self.source,self.model,self.language,w.whisper_cache,self.terms,self.vad,
-                    worker_module='app.features.subtitles.recheck_worker',extra_args=['--request',str(self.request_path)]):
+                    worker_module=module,extra_args=extra):
                 self.finish()
                 w.subtitle_finished()
         except (ValueError,OSError) as exc:
@@ -235,9 +246,9 @@ class SubtitleRecheck(QDialog):
         if not self.unchanged() or w.subtitle_job.busy or not w.resolve_subtitle_edit():
             self.status.setText('원본 자막이 바뀌었습니다. 다시 열어 재검토하세요.')
             return
-        if w.active_sequence():
+        if not self.sequence_id and w.active_sequence():
             w.timeline.sequence_tabs.setCurrentIndex(0)
-        if w.media.selected_path() != self.source:
+        if not self.sequence_id and w.media.selected_path() != self.source:
             w.media.restore(w.media.paths(),self.source,w.media.names())
             w.open_media(self.source)
         self.listen_end = round((self.ranges[row][1]+self.offset)*1000)
@@ -271,24 +282,28 @@ class SubtitleRecheck(QDialog):
             return
         try:
             rows = apply_candidates(self.snapshot,replacements,self.offset,self.protect.isChecked())
-            w.remember_subtitles(self.source)
-            w.project.subtitles[self.source] = rows
+            if self.sequence_id:
+                w.commit_work_subtitles(rows,sequence_id=self.sequence_id,message="작업본 자막 재검토 적용")
+            else:
+                w.remember_subtitles(self.source)
+                w.project.subtitles[self.source] = rows
             from datetime import datetime, timezone
-            info = dict(w.project.subtitle_runs.get(self.source,{}))
+            info = dict(w.active_sequence().get("subtitle_run",{}) if self.sequence_id else w.project.subtitle_runs.get(self.source,{}))
             info.update(recheck_model=self.model,recheck_language=self.language,recheck_at=datetime.now(timezone.utc).isoformat(),recheck_scope=f"{len(replacements)}개 구간 선택 적용")
-            w.project.subtitle_runs[self.source] = info
+            if self.sequence_id:w.active_sequence()["subtitle_run"]=info
+            else:w.project.subtitle_runs[self.source] = info
             w.mark_dirty()
-            if w.media.selected_path() == self.source:
+            if self.sequence_id or w.media.selected_path() == self.source:
                 w.show_source_subtitles(force=True)
             self.apply.setEnabled(False)
             self.candidates = None
-            self.status.setText(f'{len(replacements)}개 구간 적용 · 원본 검수에서 Ctrl+Z로 되돌리기 · Ctrl+S로 저장하세요.')
+            self.status.setText(f'{len(replacements)}개 구간 적용 · 작업본 검수에서 Ctrl+Z로 되돌리기 · Ctrl+S로 저장하세요.')
         except ValueError as exc:
             self.status.setText(str(exc))
 
     def stop_at_end(self):
         w = self.studio
-        if w.project is not self.project_ref or w.media.selected_path() != self.source or w.active_sequence():
+        if w.project is not self.project_ref or (w.active_edit_id!=self.sequence_id if self.sequence_id else w.media.selected_path()!=self.source or w.active_sequence()):
             self.listen_timer.stop()
             return
         if self.listen_end is not None and w.preview.timeline_position() >= self.listen_end:
@@ -301,6 +316,7 @@ class SubtitleRecheck(QDialog):
 
     def finish(self):
         self.running = False
+        if self.work:self.work.cleanup();self.work=None
         self.generate.setEnabled(True)
         self.cancel.setEnabled(False)
         if self.request_path:

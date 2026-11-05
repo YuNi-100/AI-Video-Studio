@@ -36,6 +36,10 @@ def validate_sequence(value):
     if not _number(duration) or not 0<duration<=604800:
         raise ValueError('시퀀스 원본 길이가 올바르지 않습니다.')
     result['duration']=float(duration)
+    if 'subtitle_run' in value:
+        info=value['subtitle_run']
+        if not isinstance(info,dict) or any(not isinstance(k,str) or not isinstance(v,(str,bool)) or len(str(v))>2000 for k,v in info.items()):raise ValueError('작업본 자막 생성 정보가 올바르지 않습니다.')
+        result['subtitle_run']=deepcopy(info)
     if 'timeline_captions' in value:
         from app.features.subtitles.model import validate_segments
         rows=value['timeline_captions']

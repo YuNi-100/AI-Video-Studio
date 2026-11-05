@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import json
@@ -136,11 +137,17 @@ class ProjectUITests(unittest.TestCase):
         import hashlib
         before = hashlib.sha256(fixture.read_bytes()).digest()
         self.window.media.restore([str(fixture), str(other)], str(fixture))
+        tree=self.window.media.project_tree
+        item=next(r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive) if r.data(0,Qt.ItemDataRole.UserRole)[0]=='media')
+        tree.setCurrentItem(item)
         self.window.media.remove_button.click()
         self.assertEqual(self.window.media.paths(), [str(other)])
         self.assertEqual(self.window.project.active_path, str(other))
         self.assertTrue(self.window.dirty)
         self.assertEqual(before, hashlib.sha256(fixture.read_bytes()).digest())
+        tree=self.window.media.project_tree
+        item=next(r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive) if r.data(0,Qt.ItemDataRole.UserRole)[0]=='media')
+        tree.setCurrentItem(item)
         self.window.media.remove_button.click()
         self.assertEqual(self.window.media.paths(), [])
         self.assertIsNone(self.window.project.active_path)

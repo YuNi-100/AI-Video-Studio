@@ -1,3 +1,4 @@
+from copy import deepcopy
 import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import tempfile
@@ -156,6 +157,7 @@ class RealRecognitionTests(unittest.TestCase):
         self.window.whisper_cache = Path(os.environ["STUDIO_WHISPER_CACHE"])
         self.window.media.add_files([FIXTURE])
         self.wait_for(lambda: self.window.preview.ready, 10000)
+        self.window.create_edit_sequence(str(FIXTURE.resolve()),[(0,7)],7.188)
         self.window.update_subtitle_controls()
         self.assertTrue(self.window.subtitle_panel.generate.isEnabled())
 
@@ -178,7 +180,7 @@ class RealRecognitionTests(unittest.TestCase):
         self.assertEqual(completed.count(), 1)
         self.assertGreater(len(ticks), 5)
         source = str(FIXTURE.resolve())
-        result = self.window.project.subtitles[source]
+        result = self.window.active_sequence()["timeline_captions"]
         self.assertGreater(len(result), 0)
         self.assertIn("subtitles", " ".join(s["text"] for s in result).lower())
         self.assertGreater(result[0]["end"], result[0]["start"])
@@ -187,7 +189,8 @@ class RealRecognitionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "recognized.avsp"
             self.assertTrue(self.window.save_current(path=path))
-            self.assertEqual(load_project(path).subtitles[source], result)
+            self.assertEqual(load_project(path).edit_sequences[0]["timeline_captions"], result)
+            self.assertNotIn(source,load_project(path).subtitles)
 
     def test_no_speech_returns_empty_without_fake_results(self):
         source = FIXTURE.parent / "테스트 영상.mp4"
@@ -207,11 +210,14 @@ class RealRecognitionTests(unittest.TestCase):
         self.prepare()
         source = str(FIXTURE.resolve())
         self.window.project.subtitles[source] = SEGMENTS
+        self.window.commit_work_subtitles(SEGMENTS)
+        before=deepcopy(self.window.active_sequence()["timeline_captions"])
         with patch("app.ui.main_window.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
             self.window.generate_subtitles("tiny", "en")
         QTimer.singleShot(100, self.window.subtitle_job.cancel)
         self.wait_for(lambda: not self.window.subtitle_job.busy, 10000)
         self.assertEqual(self.window.project.subtitles[source], SEGMENTS)
+        self.assertEqual(self.window.active_sequence()["timeline_captions"],before)
         self.assertTrue(self.window.media.isEnabled())
 
 

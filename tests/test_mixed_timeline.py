@@ -114,7 +114,7 @@ class MixedUITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'mixed.avsp';self.assertTrue(w.save_current(path=path))
             self.assertEqual(load_project(path).edit_sequences[0],w.active_sequence())
-        w.undo_subtitle();self.assertNotIn('timeline_captions',w.active_sequence())
+        w.undo_subtitle();self.assertEqual(w.active_sequence()['timeline_captions'][0]['start'],.2)
         w.redo_subtitle();self.assertIn('timeline_captions',w.active_sequence())
     def test_subtitle_shift_moves_followers_without_video(self):
         self.gesture((self.x(350),90),(self.x(350),90),Qt.KeyboardModifier.AltModifier)
@@ -205,7 +205,7 @@ class MixedUITests(unittest.TestCase):
         self.assertAlmostEqual(row['start'],1.2);self.assertAlmostEqual(row['end'],1.7)
     def test_split_crossing_caption_belongs_to_each_piece(self):
         w=self.w;c=w.timeline.canvas
-        w.project.subtitles[SOURCE]=[dict(start=.2,end=.8,text='걸친 자막')];w.render_edit_sequence()
+        w.commit_work_subtitles([dict(start=.2,end=.8,text='걸친 자막')]);w.render_edit_sequence()
         self.click(350,47);w.seek_transport(500);w.split_sequence_clip()
         rows=sequence_layout(w.active_sequence())[1]
         self.assertEqual([(r['start'],r['end']) for r in rows],[(.2,.5),(.5,.8)])

@@ -141,23 +141,24 @@ class WorkflowUITests(unittest.TestCase):
         w=self.w
         w.project.subtitles[SOURCE]=[dict(start=0,end=1,text='기존')]
         w.show_source_subtitles(force=True)
+        w.create_edit_sequence(SOURCE,[(0,7)],7.188)
         w.open_subtitle_recheck();d=w.recheck_dialog
         d.ranges=[[0,1]];d.running=True
         w.subtitle_job.run_info={'alternate':[dict(start=.1,end=.9,text='힌트 제외')]}
         w.subtitles_ready(SOURCE,[dict(start=.1,end=.9,text='기본 후보')]);w.subtitle_finished()
-        self.assertEqual(w.project.subtitles[SOURCE][0]['text'],'기존')
+        self.assertEqual(w.active_sequence()['timeline_captions'][0]['text'],'기존')
         if os.environ.get('STUDIO_RECHECK_PREVIEW'):d.grab().save(os.environ['STUDIO_RECHECK_PREVIEW'])
         d.table.cellWidget(0,4).setCurrentIndex(1)
         d.table.item(0,0).setCheckState(Qt.CheckState.Checked)
         d.apply_selected()
-        self.assertEqual(w.project.subtitles[SOURCE][0]['text'],'힌트 제외')
-        w.undo_subtitle();self.assertEqual(w.project.subtitles[SOURCE][0]['text'],'기존')
-        w.redo_subtitle();self.assertEqual(w.project.subtitles[SOURCE][0]['text'],'힌트 제외')
+        self.assertEqual(w.active_sequence()['timeline_captions'][0]['text'],'힌트 제외')
+        w.undo_subtitle();self.assertEqual(w.active_sequence()['timeline_captions'][0]['text'],'기존')
+        w.redo_subtitle();self.assertEqual(w.active_sequence()['timeline_captions'][0]['text'],'힌트 제외')
         d.prepare();d.ranges=[[0,1]];d.running=True
         w.subtitles_ready(SOURCE,[dict(start=.1,end=.9,text='미적용')]);w.subtitle_finished()
         d.table.item(0,0).setCheckState(Qt.CheckState.Checked)
-        w.project.subtitles[SOURCE][0]['text']='외부 수정'
-        d.apply_selected();self.assertEqual(w.project.subtitles[SOURCE][0]['text'],'외부 수정')
+        w.active_sequence()['timeline_captions'][0]['text']='외부 수정'
+        d.apply_selected();self.assertEqual(w.active_sequence()['timeline_captions'][0]['text'],'외부 수정')
 
     def test_two_a_clips_plus_one_b_clip_with_captions(self):
         w=self.w
@@ -184,7 +185,7 @@ class WorkflowUITests(unittest.TestCase):
     def test_cancelled_job_retains_captions_and_removes_request(self):
         w=self.w
         w.project.subtitles[SOURCE]=[dict(start=0,end=1,text='원래 자막')]
-        w.show_source_subtitles(force=True);w.open_subtitle_recheck();d=w.recheck_dialog
+        w.create_edit_sequence(SOURCE,[(0,7)],7.188);w.open_subtitle_recheck();d=w.recheck_dialog
         with patch.object(w.subtitle_job,'start',return_value=True):d.begin()
         path=d.request_path
         self.assertTrue(path.exists())
@@ -200,7 +201,7 @@ class WorkflowUITests(unittest.TestCase):
         w.subtitle_panel.model.setCurrentIndex(0)
         w.subtitle_panel.language.setCurrentIndex(2)
         w.project.subtitles[SOURCE]=[dict(start=0,end=1,text='보존')]
-        w.show_source_subtitles(force=True)
+        w.create_edit_sequence(SOURCE,[(0,7)],7.188)
         w.select_subtitle(0)
         w.open_subtitle_recheck();d=w.recheck_dialog
         d.use_selection()

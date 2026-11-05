@@ -7,8 +7,8 @@ from app.core.media import validate_video
 from app.features.subtitles.model import validate_segments, validate_hotwords
 
 
-def transcribe(source, model_size, language, cache, emit, model_factory=None, hotwords="", skip_silence=False):
-    path = validate_video(source)
+def transcribe(source, model_size, language, cache, emit, model_factory=None, hotwords="", skip_silence=False, _audio_input=False):
+    path = Path(source) if _audio_input else validate_video(source)
     hotwords = validate_hotwords(hotwords)
     if type(skip_silence) is not bool:
         raise ValueError("음성 필터 설정이 올바르지 않습니다.")

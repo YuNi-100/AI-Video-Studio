@@ -38,7 +38,8 @@ class ResizeClickTests(unittest.TestCase):
                 self.assertGreaterEqual(rect.height(), 27)
                 selection_point = viewport.mapTo(window, rect.center())
                 QTest.mouseClick(window.windowHandle(), Qt.MouseButton.LeftButton, pos=selection_point)
-                self.assertEqual(window.media.selected_path(), other)
+                self.assertEqual(listing.currentItem().data(0,Qt.ItemDataRole.UserRole)[2],other)
+                self.assertEqual(window.media.selected_path(),other)
                 rename = window.media.rename_button
                 for point in (rename.rect().center(), QPoint(4, rename.height() // 2), QPoint(rename.width() - 5, rename.height() // 2)):
                     mapped = rename.mapTo(window, point)
@@ -46,7 +47,7 @@ class ResizeClickTests(unittest.TestCase):
                     with patch.object(QInputDialog, "getText", return_value=("창 축소 확인", True)) as dialog:
                         QTest.mouseClick(window.windowHandle(), Qt.MouseButton.LeftButton, pos=mapped)
                         self.assertEqual(dialog.call_count, 1)
-                self.assertEqual(window.media.listing.currentItem().text(), "창 축소 확인")
+                self.assertEqual(listing.currentItem().text(0), "창 축소 확인")
                 remove = window.media.remove_button
                 self.assertTrue(window.media.relink_button.isHidden())
                 self.assertTrue(remove.isHidden())

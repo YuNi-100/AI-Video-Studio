@@ -88,7 +88,7 @@ class SequenceUITests(unittest.TestCase):
         self.assertEqual(w.preview.timeline_duration(),3000)
         self.assertEqual(len(w.timeline.canvas.blocks),6)
         self.assertFalse(w.timeline.scope.isEnabled())
-        self.assertFalse(w.subtitle_panel.isEnabled())
+        self.assertTrue(w.subtitle_panel.isEnabled())
         w.seek_transport(1500)
         self.assertEqual(w.preview.timeline_position(),1500)
         self.assertAlmostEqual(w.preview.player.position(),3500,delta=150)
@@ -99,7 +99,7 @@ class SequenceUITests(unittest.TestCase):
         self.assertEqual(w.preview.sequence_ranges,[(0,1000),(3000,4000),(5000,6000)])
         w.timeline.sequence_tabs.setCurrentIndex(0)
         self.assertIsNone(w.preview.sequence_ranges)
-        self.assertTrue(w.subtitle_panel.isEnabled())
+        self.assertFalse(w.subtitle_panel.isEnabled())
         self.assertEqual(w.project.subtitles[self.source],original)
         self.assertEqual(Path(self.source).read_bytes(),before)
         with tempfile.TemporaryDirectory() as folder:

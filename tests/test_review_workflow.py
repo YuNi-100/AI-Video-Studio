@@ -81,7 +81,13 @@ class ReviewUITests(unittest.TestCase):
         self.window.show()
         self.window.media.restore([SOURCE], SOURCE)
         self.window.project.subtitles[SOURCE] = deepcopy(ROWS)
-        self.window.show_source_subtitles(0, force=True)
+        self.window.open_media(SOURCE)
+        self.window.preview.audio.setMuted(True)
+        deadline=time.monotonic()+8
+        while not self.window.preview.ready and time.monotonic()<deadline:QTest.qWait(20)
+        self.assertTrue(self.window.preview.ready)
+        self.window.create_edit_sequence(SOURCE,[(0,7)],7.188)
+        self.window.select_subtitle(0)
         self.editor = self.window.subtitle_panel.editor
         self.app.processEvents()
 
@@ -96,23 +102,23 @@ class ReviewUITests(unittest.TestCase):
         self.editor.text.setPlainText("라겸, 앞에 봐!")
         self.editor.start.setValue(.5)
         self.assertTrue(self.window.apply_subtitle_edit())
-        rows = self.window.project.subtitles[SOURCE]
+        rows = self.window.active_sequence()["timeline_captions"]
         self.assertEqual(rows[0]["text"], "라겸, 앞에 봐!")
         self.assertTrue(rows[0]["reviewed"])
         self.window.remove_subtitle()
-        self.assertEqual(len(self.window.project.subtitles[SOURCE]), 1)
+        self.assertEqual(len(self.window.active_sequence()["timeline_captions"]), 1)
         self.window.undo_subtitle()
-        self.assertEqual(len(self.window.project.subtitles[SOURCE]), 2)
+        self.assertEqual(len(self.window.active_sequence()["timeline_captions"]), 2)
         self.window.add_subtitle()
-        self.assertEqual(len(self.window.project.subtitles[SOURCE]), 3)
+        self.assertEqual(len(self.window.active_sequence()["timeline_captions"]), 3)
         self.window.undo_subtitle()
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "edited.avsp"
             self.window.project.subtitle_runs[SOURCE] = {"model": "large-v3-turbo", "language": "ko", "skip_silence": False}
             self.assertTrue(self.window.save_current(path=path))
             self.assertEqual(load_project(path).subtitle_runs[SOURCE]["model"], "large-v3-turbo")
-            self.assertTrue(load_project(path).subtitles[SOURCE][0]["reviewed"])
-            self.assertEqual(load_project(path).subtitles[SOURCE][0]["text"], "라겸, 앞에 봐!")
+            self.assertTrue(load_project(path).edit_sequences[0]["timeline_captions"][0]["reviewed"])
+            self.assertEqual(load_project(path).edit_sequences[0]["timeline_captions"][0]["text"], "라겸, 앞에 봐!")
             target = Path(folder) / "edited.srt"
             with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
                 self.assertTrue(self.window.export_current_subtitles(target))
@@ -138,18 +144,18 @@ class ReviewUITests(unittest.TestCase):
             self.assertEqual(self.editor.selected_index, 0)
             self.assertEqual(self.editor.table.currentRow(), 0)
             self.window.media.listing.setCurrentRow(1)
-            self.assertEqual(self.window.media.selected_path(), SOURCE)
+            self.assertEqual(self.window.media.selected_path(), other)
             self.assertEqual(self.editor.text.toPlainText(), "아직 적용하지 않은 수정")
         self.assertEqual(self.window.project.subtitles[SOURCE], ROWS)
 
     def test_timeline_selection_seek_and_zoom(self):
         canvas = self.window.timeline.canvas
         self.window.timeline.set_source(10000, ROWS, "test")
-        selected = QSignalSpy(canvas.subtitle_selected)
+        selected = QSignalSpy(canvas.clip_selected)
         x = round(95 + (canvas.width()-107)*.15)
         QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, pos=QPoint(x, 90))
         self.assertEqual(selected.count(), 1)
-        seek = QSignalSpy(canvas.seek_requested)
+        seek = QSignalSpy(canvas.clip_seek_requested)
         QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, pos=QPoint(x, 45))
         self.assertEqual(seek.count(), 1)
         self.window.timeline.zoom.setValue(200)
@@ -172,7 +178,7 @@ class ReviewUITests(unittest.TestCase):
         self.assertFalse(self.window.preview.video.caption.isVisible())
         self.editor.overlay.setChecked(True)
         self.assertTrue(self.window.preview.video.caption.isVisible())
-        self.window.preview.position_changed(2000)
+        self.window.seek_transport(2000)
         self.assertFalse(self.window.preview.video.caption.isVisible())
 
 

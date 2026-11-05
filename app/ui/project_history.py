@@ -152,7 +152,7 @@ class ProjectHistory:
 
 
 def install_history_actions(window_class):
-    names=('rename_project','new_organized_folder','rename_organized','delete_organized','paste_organized',
+    names=('open_asset_work','rename_project','new_organized_folder','rename_organized','delete_organized','paste_organized',
         'compose_selected','reorder_organized','handle_media_drop','handle_organization_drop','create_labeled_edit',
         'edit_from_selected_assets','begin_timeline_edit','request_timeline_split','create_edit_sequence',
         'commit_sequence','edit_sequence_clip','split_sequence_clip','delete_sequence_clip','delete_timeline_selection',

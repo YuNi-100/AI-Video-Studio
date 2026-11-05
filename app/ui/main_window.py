@@ -29,18 +29,17 @@ from app.features.silence.sequence import sequence_sources
 
 from app.ui.timeline_workflow import TimelineWorkflow
 
+from app.ui.work_subtitles import WorkSubtitles
 from app.ui.edit_sequence_workflow import EditSequenceWorkflow
 from app.ui.clip_clipboard import ClipClipboardWorkflow
 
-class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
+class MainWindow(WorkSubtitles, ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
     def open_subtitle_recheck(self):
-        selected_caption = self.subtitle_panel.editor.selected_index if not self.active_sequence() else -1
+        selected_caption = self.subtitle_panel.editor.selected_index
         if self.subtitle_job.busy or not self.resolve_subtitle_edit():
             return
-        if self.active_sequence():
-            self.timeline.sequence_tabs.setCurrentIndex(0)
-        if self.active_sequence() or not self.media.selected_path() or not self.preview.ready:
-            self.statusBar().showMessage("미디어 보관함에서 재검토할 원본 영상을 먼저 열어 주세요.")
+        if not self.active_sequence() or not self.preview.ready:
+            self.statusBar().showMessage("아래 편집본 목록에서 재검토할 작업본을 먼저 선택하세요.")
             return
         if hasattr(self,"recheck_dialog") and self.recheck_dialog.isVisible():
             self.recheck_dialog.raise_()
@@ -340,6 +339,9 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         QMessageBox.information(self, "V0.1 개발 계획", "\n".join(f"{i}. {name} — {state}" for i, (name, state) in enumerate(ROADMAP, 1)))
 
     def open_media(self, path):
+        if self.active_sequence() and not self._opening_edit_sequence and not self._workspace_loading:
+            self.statusBar().showMessage("보관함에 원본을 추가했습니다. 현재 작업본은 유지됩니다.")
+            return
         if hasattr(self, "subtitle_job") and self.subtitle_job.busy:
             return
         if not self.resolve_subtitle_edit():
@@ -545,8 +547,8 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
     def update_subtitle_controls(self, *_):
         if not hasattr(self, "subtitle_job"):
             return
-        available = (self.preview.ready and self.preview.player.hasAudio()
-                     and self.media.selected_path() == str(self.preview.source)
+        available = (bool(self.active_sequence()) and self.preview.ready
+                     and self.work_has_audio()
                      and recognition_installed() and not self.subtitle_job.busy)
         self.subtitle_panel.generate.setEnabled(available)
         if not self.subtitle_job.busy:
@@ -554,21 +556,24 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
                 self.subtitle_panel.status.setText("음성 인식 패키지가 필요합니다. requirements.txt 설치 후 앱을 다시 실행하세요.")
             elif not self.preview.ready:
                 self.subtitle_panel.status.setText("음성이 있는 영상을 선택하세요.")
-            elif not self.preview.player.hasAudio():
-                self.subtitle_panel.status.setText("영상에 음성 트랙이 없습니다.")
+            elif self.active_sequence() and not self.work_has_audio():
+                self.subtitle_panel.status.setText("선택한 작업본에 음성 트랙이 없습니다.")
             elif self.subtitle_panel.status.text() in ("음성이 있는 영상을 선택하세요.", "영상에 음성 트랙이 없습니다."):
                 self.subtitle_panel.status.setText("생성 준비됨 · 완료 후 검수·수정하세요.")
 
     def show_source_subtitles(self, select=-1, force=False):
         if self.render_edit_sequence():
+            if select>=0:self.subtitle_panel.editor.set_selection(select)
             return
         self.preview.edit_name=""
         self.preview.set_sequence_ranges(None)
         if hasattr(self,"video_export_action"):self.video_export_action.setEnabled(False)
-        self.subtitle_panel.setEnabled(True)
+        self.subtitle_panel.setEnabled(False)
+        self.subtitle_panel.status.setText("아래 편집본 목록에서 작업 대상을 선택하세요.")
         self.timeline.canvas.sequence_view = False
         self.timeline.begin_edit.show()
         self.timeline.begin_edit.setEnabled(self.preview.ready and not self.subtitle_job.busy)
+        self.timeline.begin_edit.setToolTip("독립 작업본을 아래 편집본 목록에 만들어 편집합니다.")
         self.timeline.canvas.preview_blocks = None
         self.timeline.split_button.hide()
         self.timeline.delete_button.hide()
@@ -603,6 +608,9 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.update_history_controls()
 
     def generate_subtitles(self, model, language):
+        if self.active_sequence():
+            self.generate_work_subtitles(model,language)
+            return
         if not self.resolve_subtitle_edit():
             return
         if not self.subtitle_panel.generate.isEnabled() or self.subtitle_job.busy:
@@ -627,6 +635,9 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
             self.subtitle_finished()
 
     def subtitles_ready(self, source, segments):
+        if getattr(self,"_work_caption_job",None):
+            self.work_subtitles_ready(segments)
+            return
         if hasattr(self,"recheck_dialog") and self.recheck_dialog.running:
             self.recheck_dialog.receive(source,segments)
             return
@@ -654,6 +665,9 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.statusBar().showMessage(message.splitlines()[0])
 
     def subtitle_finished(self):
+        if getattr(self,"_work_caption_temp",None):
+            self._work_caption_temp.cleanup();self._work_caption_temp=None
+        self._work_caption_job=None
         if hasattr(self,"recheck_dialog") and self.recheck_dialog.running:
             self.recheck_dialog.finish()
         self.media.setEnabled(True)
@@ -688,11 +702,21 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         del stack[:-30]
 
     def subtitle_duration(self):
+        if self.active_sequence():return self.preview.timeline_duration()/1000
         if self.preview.ready and str(self.preview.source) == self.media.selected_path():
             return self.preview.timeline_duration() / 1000
         return None
 
     def apply_subtitle_edit(self):
+        if self.active_sequence():
+            editor=self.subtitle_panel.editor
+            if self.subtitle_job.busy:return False
+            try:
+                rows,index=edit_segment(self.timeline.canvas.segments,editor.selected_index,editor.start.value(),editor.end.value(),editor.text.toPlainText(),None)
+                self.commit_work_subtitles(rows,index)
+                self.seek_transport(round(rows[index]['start']*1000))
+                return True
+            except ValueError as exc:QMessageBox.warning(self,'자막 수정 확인',str(exc));return False
         editor = self.subtitle_panel.editor
         source = self.editor_source
         if not source or self.subtitle_job.busy:
@@ -729,6 +753,16 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.subtitle_panel.tabs.setCurrentIndex(1)
 
     def add_subtitle(self):
+        if self.active_sequence():
+            if self.subtitle_job.busy or not self.resolve_subtitle_edit():return
+            rows=deepcopy(self.timeline.canvas.segments)
+            start=self.preview.timeline_position()/1000
+            end=min(start+2,self.preview.timeline_duration()/1000)
+            if end<=start:return
+            row=dict(start=start,end=end,text='새 자막',reviewed=False);rows.append(row);rows.sort(key=lambda r:r['start'])
+            self.commit_work_subtitles(rows,rows.index(row),message='작업본 자막 추가')
+            self.subtitle_panel.tabs.setCurrentIndex(1);self.subtitle_panel.editor.text.setFocus();self.subtitle_panel.editor.text.selectAll()
+            return
         if not self.resolve_subtitle_edit() or self.subtitle_job.busy:
             return
         source = self.media.selected_path()
@@ -756,6 +790,11 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.subtitle_panel.editor.text.selectAll()
 
     def remove_subtitle(self):
+        if self.active_sequence():
+            if self.subtitle_job.busy or not self.resolve_subtitle_edit():return
+            index=self.subtitle_panel.editor.selected_index;rows=self.timeline.canvas.segments
+            if 0<=index<len(rows):self.commit_work_subtitles([r for i,r in enumerate(rows) if i!=index],max(0,index-1),message='작업본 자막 삭제')
+            return
         if not self.resolve_subtitle_edit() or self.subtitle_job.busy:
             return
         source = self.editor_source
@@ -812,7 +851,16 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
 
     def export_current_subtitles(self, path=None):
         if self.active_sequence():
-            return False
+            if not self.resolve_subtitle_edit():return False
+            rows=self.timeline.canvas.segments
+            if not rows:return False
+            if any(not r.get('reviewed') for r in rows) and QMessageBox.question(self,'미검수 자막 포함','현재 작업본의 미검수 자막도 SRT로 저장할까요?')!=QMessageBox.StandardButton.Yes:return False
+            if path is None:path,_=QFileDialog.getSaveFileName(self,'작업본 SRT 내보내기',self.active_sequence()['name']+'.srt','SubRip 자막 (*.srt)')
+            if not path:return False
+            if not str(path).lower().endswith('.srt'):path=str(path)+'.srt'
+            try:export_srt(rows,path)
+            except ValueError as exc:QMessageBox.warning(self,'SRT 저장 실패',str(exc));return False
+            self.statusBar().showMessage('작업본 자막 저장 완료');return True
         if not self.resolve_subtitle_edit():
             return False
         source = self.media.selected_path()

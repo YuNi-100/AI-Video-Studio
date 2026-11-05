@@ -134,6 +134,8 @@ class OrganizerWorkflow:
 
     def focus_active_sequence_in_list(self):
         """Explicit view changes select the actual opened edit, including refusals."""
+        self.media.project_tree.clearSelection()
+        self.media.project_tree.setCurrentItem(None)
         tree=self.timeline.sequence_tree
         item=next((r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive)
                    if r.data(0,Qt.ItemDataRole.UserRole)==('sequence',self.active_document_id,self.active_edit_id)),None)
@@ -186,7 +188,6 @@ class OrganizerWorkflow:
                         item.setExpanded(expanded.get(tuple(data),True));tree.disclosure(item,item.isExpanded())
                     if tuple(data) in selected:item.setSelected(True)
                     if tuple(data)==current_data:tree.setCurrentItem(item,0,tree.selectionModel().SelectionFlag.NoUpdate)
-                    if data[0]=='media' and data[2]==self.media.selected_path() and active is None:active=item
                     if data[0]=='sequence' and data[2]==self.active_edit_id:active=item
                 if not tree.selectedItems() and active:active.setSelected(True);tree.setCurrentItem(active)
                 tree.verticalScrollBar().setValue(oldscroll)
@@ -201,12 +202,17 @@ class OrganizerWorkflow:
         if area=='edit' and QApplication.keyboardModifiers() & (Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.ShiftModifier):
             return
         if data[0]=='sequence':self.open_edit_sequence(data[2])
-        elif data[0] in ('media','asset'):
+        elif data[0]=='media':
             record=self.record_for(data)
             if record and record['source'] in self.media.paths():
-                path=record['source'];row=self.media.paths().index(path)
-                if self.media.listing.currentRow()==row:self.open_media(path)
-                else:self.media.listing.setCurrentRow(row)
+                with QSignalBlocker(self.media.listing):self.media.listing.setCurrentRow(self.media.paths().index(record['source']))
+                self.media.refresh_controls()
+            self.statusBar().showMessage('보관함 원본 선택 · 우클릭 원본 미리보기 / 아래 목록으로 드래그해 작업 자료 추가')
+        elif data[0]=='asset':
+            record=self.record_for(data)
+            if record:
+                try:self.open_asset_work(record)
+                except (ValueError,OSError) as exc:self.statusBar().showMessage("작업본 열기 실패: "+str(exc))
 
     def delete_organized(self,area):
         if not self.allow_project_switch():return
@@ -327,7 +333,9 @@ class OrganizerWorkflow:
             menu.addAction('선택 자료로 새 편집본',self.edit_from_selected_assets)
             menu.addAction('선택 편집본 조합',self.compose_selected)
             menu.addAction('편집본 열기',lambda:self.organized_clicked(item,area) if item else None)
-        else:menu.addAction('미디어 추가…',self.media.choose_files)
+        else:
+            menu.addAction('원본 미리보기',self.preview_library_source)
+            menu.addAction('미디어 추가…',self.media.choose_files)
         menu.exec(tree.viewport().mapToGlobal(point))
 
     def edit_from_selected_assets(self):

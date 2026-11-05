@@ -54,6 +54,7 @@ class EditSequenceWorkflow:
             number+=1
         seq=validate_sequence(dict(id=uuid4().hex,name=f'무음 컷 {number}',source=source,
                                    ranges=[list(pair) for pair in ranges],duration=duration))
+        self.freeze_work_captions(seq)
         self.project.edit_sequences.append(seq)
         self.assign_edit_folder(seq["id"])
         self.closed_sequence_ids.discard(seq["id"])
@@ -121,11 +122,17 @@ class EditSequenceWorkflow:
         seq=self.active_sequence()
         if seq is None:
             return False
+        self.freeze_work_captions(seq)
         blocks,cues,duration=sequence_layout(seq,self.project.subtitles,{path:self.placement(path)['video'] for path in self.media.paths()})
         self.subtitle_panel.show_segments(deepcopy(cues))
-        self.editor_source=None
-        self.subtitle_panel.setEnabled(False)
-        self.export_action.setEnabled(False)
+        self.editor_source="edit:"+seq["id"]
+        self.subtitle_panel.setEnabled(True)
+        basis=self.subtitle_panel.editor.export_basis
+        with QSignalBlocker(basis):basis.setCurrentIndex(basis.findData("timeline"))
+        basis.setEnabled(False);basis.setToolTip("선택한 작업본의 시간 기준으로 출력합니다.")
+        self.subtitle_panel.editor.run_info.setText("작업 대상: "+seq["name"]+" · 편집본 시간 기준")
+        self.subtitle_panel.status.setText("자막 작업 대상: "+seq["name"])
+        self.export_action.setEnabled(bool(cues))
         if hasattr(self,"video_export_action"):self.video_export_action.setEnabled(bool(sequence_clips(seq)))
         self.preview.edit_name=seq["name"]
         self.preview.set_sequence_clips(sequence_clips(seq))
@@ -252,7 +259,7 @@ class EditSequenceWorkflow:
     def sequence_snapshot(self):
         return (deepcopy(self.active_sequence()),self.timeline.canvas.selected_clip,self.preview.timeline_position(),set(self.timeline.canvas.selected_keys),set(self.timeline.canvas.selected_subtitles))
 
-    def commit_sequence(self,candidate,message):
+    def commit_sequence(self,candidate,message,position=None):
         seq=self.active_sequence()
         if sequence_clips(seq)==sequence_clips(candidate) and seq.get('linked',True)==candidate.get('linked',True) and seq.get('timeline_captions')==candidate.get('timeline_captions') and seq.get('scene_tags')==candidate.get('scene_tags'):
             return
@@ -278,7 +285,7 @@ class EditSequenceWorkflow:
         selected_ids={canvas.segments[i].get('id') for i in canvas.selected_subtitles if i<len(canvas.segments)}-{None}
         cues=sequence_layout(candidate,self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})[1]
         subtitles={i for i,r in enumerate(cues) if r.get('id') in selected_ids}
-        self.restore_sequence((candidate,selected,self.preview.timeline_position(),keys,subtitles))
+        self.restore_sequence((candidate,selected,self.preview.timeline_position() if position is None else position,keys,subtitles))
         self.statusBar().showMessage(message+' · Ctrl+Z로 실행 취소 · 프로젝트를 저장하세요.')
 
     def restore_sequence(self,snapshot):
@@ -337,7 +344,7 @@ class EditSequenceWorkflow:
         track,start,end=canvas.selected_gap
         try:
             seq=dict(self.active_sequence(),timeline_captions=deepcopy(canvas.segments))
-            self.commit_sequence(close_gap(seq,start/1000,end/1000,track),'빈칸 닫기 · 컷 길이 보존')
+            self.commit_sequence(close_gap(seq,start/1000,end/1000,track),'빈칸 닫기 · 컷 길이 보존',position=start)
         except ValueError as exc:self.statusBar().showMessage(str(exc))
 
     def delete_sequence_clip(self,ripple=False):
@@ -356,9 +363,13 @@ class EditSequenceWorkflow:
                     if row.get('owner') in groups and i not in canvas.selected_subtitles:
                         row.pop('owner',None);row['detached']=True
             candidate=dict(seq,linked=False if canvas.individual_selection else linked,timeline_captions=rows)
+            clips=sequence_clips(candidate)
+            starts=[round(clips[i]['at']*1000) for i in canvas.selected_keys if 0<=i<len(clips)]
+            if not starts:starts=[round(rows[i]['start']*1000) for i in canvas.selected_subtitles if 0<=i<len(rows)]
+            position=min(starts) if ripple and starts else None
             result=delete_items(candidate,canvas.selected_keys,canvas.selected_subtitles,ripple)
             result['linked']=linked
-            self.commit_sequence(result,'붙여 삭제 · 뒤 항목 당김' if ripple else '선택 항목만 삭제 · 뒤 컷 위치 유지')
+            self.commit_sequence(result,'붙여 삭제 · 뒤 항목 당김' if ripple else '선택 항목만 삭제 · 뒤 컷 위치 유지',position=position)
         except ValueError as exc:self.statusBar().showMessage(str(exc))
 
     def split_sequence_clip(self):

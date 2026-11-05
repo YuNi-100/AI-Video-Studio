@@ -87,7 +87,7 @@ class TrackCanvas(QWidget):
                 if label_x-last_label >= 80:
                     p.drawText(QRectF(label_x,0,85,18),self.ruler_time(value,major))
                     last_label = label_x
-        for i, (name, color) in enumerate(((("V1  영상" if self.sequence_view else "V1  원본"), "#9567ff"), ("S1  자막", "#c4a6ff"), ("A1  음성", "#49c5b6"))):
+        for i, (name, color) in enumerate(((("V1  영상" if self.sequence_view else "V1  원본"), "#9567ff"), ("S1  자막", "#d9b969"), ("A1  음성", "#49c5b6"))):
             y = top + i * row
             p.setPen(QColor(color))
             p.drawText(QRectF(0, y, left-5, row), Qt.AlignmentFlag.AlignVCenter, name)
@@ -137,16 +137,16 @@ class TrackCanvas(QWidget):
             if end < self.offset or start > self.offset + self.span:
                 continue
             rect = QRectF(x_at(start), top+row+4, max(3, (end-start)/self.span*width), row-9)
-            p.setBrush(QColor("#4b326b" if not segment.get("reviewed") else "#23524b"))
-            p.setPen(QPen(QColor("#a5deef" if index in self.selected_subtitles else "#a783df" if not segment.get("reviewed") else "#49c5b6"),2 if index in self.selected_subtitles else 1))
+            p.setBrush(QColor("#393327" if not segment.get("reviewed") else "#514329"))
+            p.setPen(QPen(QColor("#f7eed5" if index in self.selected_subtitles else "#aa9467" if not segment.get("reviewed") else "#d9b969"),2 if index in self.selected_subtitles else 1))
             p.drawRoundedRect(rect, 3, 3)
             if rect.width() >= 18:
-                p.setPen(QColor("#dfcaff"))
+                p.setPen(QColor("#f5e8c9"))
                 for edge in (rect.left()+3,rect.right()-3):
                     p.drawLine(round(edge),round(rect.top()+9),round(edge),round(rect.bottom()-9))
             if rect.width() > 35:
                 text = p.fontMetrics().elidedText(segment["text"].replace("\n", " "), Qt.TextElideMode.ElideRight, max(1, round(rect.width()-10)))
-                p.setPen(QColor("#eee6ff"))
+                p.setPen(QColor("#f5e8c9"))
                 p.drawText(rect.adjusted(5, 0, -5, 0), Qt.AlignmentFlag.AlignVCenter, text)
         p.setPen(QColor("#e0c8ff"))
         x = round(x_at(self.position))

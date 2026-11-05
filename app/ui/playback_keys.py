@@ -25,13 +25,17 @@ class PlaybackKeys(QObject):
             return False
         if event.key() not in (Qt.Key.Key_Space, Qt.Key.Key_Left, Qt.Key.Key_Right):
             return False
-        if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+        allowed=(Qt.KeyboardModifier.NoModifier,Qt.KeyboardModifier.ShiftModifier) if event.key() in (Qt.Key.Key_Left,Qt.Key.Key_Right) else (Qt.KeyboardModifier.NoModifier,)
+        if event.modifiers() not in allowed:
             return False
         focus = QApplication.focusWidget()
+        timeline_active=bool(getattr(window,"timeline_focus",None) and window.timeline_focus.active)
+        if not timeline_active and focus is not window.preview and not (focus and window.preview.isAncestorOf(focus)):
+            return False
         while focus is not None and focus is not window:
-            if isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QComboBox, QCheckBox, QRadioButton)):
+            if isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QComboBox)) or (not timeline_active and isinstance(focus,(QCheckBox,QRadioButton))):
                 return False
-            if event.key() != Qt.Key.Key_Space and isinstance(focus, (QAbstractItemView, QAbstractSlider)):
+            if not timeline_active and isinstance(focus, (QAbstractItemView, QAbstractSlider)):
                 return False
             focus = focus.parentWidget()
         return window.preview.ready
@@ -50,6 +54,7 @@ class PlaybackKeys(QObject):
         if event.key() == Qt.Key.Key_Space:
             self.window.toggle_transport()
         elif preview.player.isSeekable():
-            delta = -5000 if event.key() == Qt.Key.Key_Left else 5000
+            step=5000 if event.modifiers()==Qt.KeyboardModifier.ShiftModifier else 1000
+            delta = -step if event.key() == Qt.Key.Key_Left else step
             self.window.seek_transport(max(0, min(self.window.transport_duration_value(), self.window.transport_position_value() + delta)))
         return True

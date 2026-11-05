@@ -32,8 +32,12 @@ class PlaybackKeyTests(unittest.TestCase):
             window.preview.setFocus()
             with patch.object(window.preview.player, "isSeekable", return_value=True), patch.object(window, "transport_duration_value", return_value=20000), patch.object(window, "transport_position_value", return_value=8000), patch.object(window, "seek_transport") as seek:
                 QTest.keyClick(window.preview, Qt.Key.Key_Left)
-                seek.assert_called_with(3000)
+                seek.assert_called_with(7000)
                 QTest.keyClick(window.preview, Qt.Key.Key_Right)
+                seek.assert_called_with(9000)
+                QTest.keyClick(window.preview, Qt.Key.Key_Left, Qt.KeyboardModifier.ShiftModifier)
+                seek.assert_called_with(3000)
+                QTest.keyClick(window.preview, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
                 seek.assert_called_with(13000)
             with patch.object(window.preview.player, "isSeekable", return_value=True), patch.object(window, "transport_duration_value", return_value=20000), patch.object(window, "transport_position_value", return_value=1000), patch.object(window, "seek_transport") as seek:
                 QTest.keyClick(window.preview, Qt.Key.Key_Left)

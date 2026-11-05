@@ -1,6 +1,6 @@
-from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSignalBlocker
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSignalBlocker, QPoint, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF, QBrush
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSlider, QScrollBar, QCheckBox, QComboBox, QPushButton, QTabBar, QToolButton, QListWidget, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSlider, QScrollBar, QCheckBox, QComboBox, QPushButton, QTabBar, QToolButton, QListWidget, QSizePolicy, QFrame
 from app.ui.components import panel, label
 from app.core.media import timecode
 from app.ui.project_tree import ProjectTree
@@ -27,6 +27,7 @@ class TrackCanvas(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.keyboard_active=False
         self.zoom = 100
         self.duration = 0
         self.position = 0
@@ -407,6 +408,9 @@ class TrackCanvas(QWidget):
         self._selection_additive=bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
 
     def keyPressEvent(self, event):
+        if not self.keyboard_active and event.key()!=Qt.Key.Key_Escape:
+            super().keyPressEvent(event)
+            return
         if not self.drag and not self.navigation and event.modifiers()==Qt.KeyboardModifier.ControlModifier and event.key() in (Qt.Key.Key_C,Qt.Key.Key_V):
             (self.copy_requested if event.key()==Qt.Key.Key_C else self.paste_requested).emit()
             event.accept()
@@ -541,10 +545,28 @@ class Timeline(QWidget):
         self.scroll.setAccessibleName("타임라인 가로 이동")
         self.scroll.valueChanged.connect(self.scroll_changed)
         track_layout.addWidget(self.scroll)
+        self.keyboard_active=False
+        self.keyboard_border=QFrame(self)
+        self.keyboard_border.setObjectName('timelineKeyboardBorder')
+        self.keyboard_border.setStyleSheet('QFrame { background: transparent; border: 1px solid #756887; border-radius: 4px; }')
+        self.keyboard_border.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents,True)
+        self.keyboard_border.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.keyboard_border.hide()
         self.zoom.valueChanged.connect(self.set_zoom)
         self.hint = label("시간 눈금 드래그 → 재생 위치 · 빈 곳 클릭 → 위치 이동 · 자막 양 끝 → 시간 조정", "muted")
         layout.addWidget(self.hint)
         self.update_scroll()
+
+    def update_keyboard_border(self):
+        if not hasattr(self,'keyboard_border'):return
+        left=max(0,self.canvas.mapTo(self,QPoint(0,0)).x()-4)
+        self.keyboard_border.setGeometry(left,8,max(1,self.width()-left-7),max(1,self.height()-16))
+        self.keyboard_border.setVisible(self.keyboard_active)
+        if self.keyboard_active:self.keyboard_border.raise_()
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        QTimer.singleShot(0,self.update_keyboard_border)
 
     def add_sequence_close(self,index):
         button=QToolButton()

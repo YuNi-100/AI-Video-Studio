@@ -16,6 +16,7 @@ from app.ui.workspace import SubtitlePanel
 from app.ui.media_panel import MediaPanel
 from app.ui.video_player import VideoPlayer
 from app.ui.playback_keys import PlaybackKeys
+from app.ui.timeline_focus import TimelineFocus
 from app.ui.history_keys import HistoryKeys
 from app.ui.project_history import ProjectHistory, install_history_actions
 from app.ui.drop_import import VideoDropImport
@@ -273,6 +274,7 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.history_keys = HistoryKeys(self)
         self.drop_import = VideoDropImport(self)
         self.selection_interaction=SelectionInteraction(self)
+        self.timeline_focus=TimelineFocus(self)
         self.timeline.canvas.clear_requested.connect(self.clear_workspace_selection)
         self.init_workspace()
         self.init_organizer()

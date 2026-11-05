@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt,QPoint
 from PySide6.QtTest import QTest
 from app.ui.main_window import MainWindow
 from app.features.silence.sequence import validate_sequence,sequence_clips
@@ -19,7 +19,7 @@ class ActiveEditTests(unittest.TestCase):
         cls.app=QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.w=MainWindow();self.w.show();self.w.preview.audio.setMuted(True)
+        self.w=MainWindow();self.w.show();self.w.activateWindow();self.w.preview.audio.setMuted(True)
         self.w.media.add_files([SOURCE])
         end=time.monotonic()+8
         while not self.w.preview.ready and time.monotonic()<end:QTest.qWait(20)
@@ -64,9 +64,12 @@ class ActiveEditTests(unittest.TestCase):
 
     def test_paste_and_both_delete_scopes_use_expected_edit(self):
         w=self.w;c=w.timeline.canvas
-        c.selected_clip=0;c.selected_keys={0,1};c.setFocus()
+        QTest.mouseClick(c,Qt.MouseButton.LeftButton,pos=QPoint(110,47))
+        c.selected_clip=0;c.selected_keys={0,1}
         QTest.keyClick(c,Qt.Key.Key_C,Qt.KeyboardModifier.ControlModifier)
-        self.tab(2);w.preview.seek_timeline(2000);c.setFocus()
+        self.tab(2)
+        QTest.mouseClick(c,Qt.MouseButton.LeftButton,pos=QPoint(110,47))
+        w.preview.seek_timeline(2000)
         QTest.keyClick(c,Qt.Key.Key_V,Qt.KeyboardModifier.ControlModifier)
         self.assert_active('b',2,3)
         self.assertEqual(len(sequence_clips(w.project.edit_sequences[0])),2)

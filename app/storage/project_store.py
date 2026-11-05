@@ -101,6 +101,8 @@ def load_project(path):
                 raise ValueError('시퀀스 원본 또는 ID가 올바르지 않습니다.')
             ids.add(seq['id'])
             project.edit_sequences.append(seq)
+        for seq in project.edit_sequences:
+            if seq.get('parent_id') and not any(s['id']==seq['parent_id'] and not s.get('parent_id') for s in project.edit_sequences):raise ValueError('수정본의 상위 편집본이 없습니다.')
         load_organization(project,data,lambda p:local_path(p,source.parent))
         return project
     except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:

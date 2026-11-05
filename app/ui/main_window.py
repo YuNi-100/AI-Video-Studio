@@ -29,11 +29,12 @@ from app.features.silence.sequence import sequence_sources
 
 from app.ui.timeline_workflow import TimelineWorkflow
 
+from app.ui.edit_groups import EditGroups
 from app.ui.work_subtitles import WorkSubtitles
 from app.ui.edit_sequence_workflow import EditSequenceWorkflow
 from app.ui.clip_clipboard import ClipClipboardWorkflow
 
-class MainWindow(WorkSubtitles, ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
+class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
     def open_subtitle_recheck(self):
         selected_caption = self.subtitle_panel.editor.selected_index
         if self.subtitle_job.busy or not self.resolve_subtitle_edit():
@@ -424,6 +425,8 @@ class MainWindow(WorkSubtitles, ProjectHistory, ClipClipboardWorkflow, Organizer
         if self.preview.source and self.preview.ready:
             self.preview.refresh_title()
         self.project.edit_sequences = [s for s in self.project.edit_sequences if sequence_sources(s)<=paths]
+        parents={s['id'] for s in self.project.edit_sequences if not s.get('parent_id')}
+        self.project.edit_sequences[:]=[s for s in self.project.edit_sequences if not s.get('parent_id') or s['parent_id'] in parents]
         if self.active_edit_id and self.active_sequence() is None:
             self.active_edit_id = None
             self.preview.set_sequence_ranges(None)

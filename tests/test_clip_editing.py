@@ -171,7 +171,7 @@ class ClipUITests(unittest.TestCase):
         t.sequence_list.setCurrentRow(1)
         self.assertFalse(w.active_sequence()['linked'])
         button.click()
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         self.assertIn(w.project.edit_sequences[0]["id"],w.closed_sequence_ids)
         self.assertEqual(t.sequence_list.count(),2)
     def test_audio_selection_survives_linked_split(self):

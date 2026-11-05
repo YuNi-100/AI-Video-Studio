@@ -135,7 +135,7 @@ class WorkflowUITests(unittest.TestCase):
         self.assertEqual(len(sequence_clips(w.active_sequence())),8)
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'copy.avsp';self.assertTrue(w.save_current(path=path))
-            self.assertEqual(load_project(path).edit_sequences[-1],w.active_sequence())
+            self.assertEqual(next(s for s in load_project(path).edit_sequences if s['id']==w.active_edit_id),w.active_sequence())
 
     def test_candidate_results_do_not_overwrite_until_checked_and_stale_guard(self):
         w=self.w

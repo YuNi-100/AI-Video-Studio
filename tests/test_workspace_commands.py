@@ -80,7 +80,7 @@ class WorkspaceCommandTests(unittest.TestCase):
         w=self.w;payload=self.setup_edit()
         self.drop([payload],w.timeline.hint,QPoint(10,5))
         self.assertEqual(len(w.project.library_items),2)
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         self.assertEqual(w.preview.timeline_duration(),4000)
         self.drop([payload],w.media.project_tree.viewport(),QPoint(10,w.media.project_tree.viewport().height()-5))
         self.assertEqual(len(w.project.library_items),2)
@@ -109,7 +109,7 @@ class WorkspaceCommandTests(unittest.TestCase):
         self.key(tree)
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'restored.avsp';self.assertTrue(w.save_current(path=path))
-            self.assertEqual(load_project(path).edit_sequences,[before])
+            self.assertEqual([s for s in load_project(path).edit_sequences if not s.get("parent_id")],[before])
 
     def test_folder_delete_undo_restores_nested_structure(self):
         w=self.w
@@ -167,13 +167,13 @@ class WorkspaceCommandTests(unittest.TestCase):
     def test_edit_creation_is_reversible_and_browsing_keeps_redo(self):
         w=self.w
         w.create_edit_sequence(A,[(0,1)],7.188)
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         w.undo_subtitle();self.assertEqual(w.project.edit_sequences,[])
         self.assertIsNone(w.active_edit_id)
         w.open_media(B)
         self.wait(lambda:w.preview.ready)
         self.assertTrue(w.project_redo)
-        w.redo_subtitle();self.assertEqual(len(w.project.edit_sequences),1)
+        w.redo_subtitle();self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
 
     def test_history_limit_and_no_op_commands(self):
         w=self.w

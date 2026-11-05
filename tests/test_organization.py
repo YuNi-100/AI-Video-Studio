@@ -84,13 +84,13 @@ class OrganizationUITests(unittest.TestCase):
         w.project.edit_locations[one]=folder
         w.create_edit_sequence(A,[(1,2)],7.188);two=w.active_edit_id
         w.project.edit_locations[two]=folder;w.mark_dirty()
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         w.close_edit_sequence(w.timeline.sequence_tabs.currentIndex())
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         self.assertIn(two,w.closed_sequence_ids)
         w.organized_clicked(self.find('sequence',two),'edit')
         self.assertEqual(w.active_edit_id,two)
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         self.assertTrue(w.rename_organized('edit',self.find('sequence',two),'후반 편집본'))
         self.assertEqual(w.timeline.sequence_tabs.tabText(w.timeline.sequence_tabs.currentIndex()),'후반 편집본')
     def test_asset_drop_to_existing_tab_appends_and_blank_tab_creates(self):
@@ -99,9 +99,9 @@ class OrganizationUITests(unittest.TestCase):
         rect=tabs.tabRect(tabs.currentIndex())
         self.assertTrue(w.handle_media_drop([B],tabs,QPointF(rect.center())))
         self.assertEqual(w.preview.timeline_duration(),4000)
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         self.assertTrue(w.handle_media_drop([B],tabs,QPointF(tabs.width()-2,rect.center().y())))
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         self.assertEqual(w.preview.timeline_duration(),3000)
     def test_copy_paste_folder_and_remove_folder_retains_contents(self):
         w=self.w;folder=w.new_organized_folder('edit','작업')
@@ -124,7 +124,7 @@ class OrganizationUITests(unittest.TestCase):
         w.compose_selected();combined=w.active_sequence()
         self.assertEqual(combined['kind'],'composition')
         self.assertEqual(w.preview.timeline_duration(),2000)
-        self.assertEqual(len(w.project.edit_sequences),3)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),3)
         w.project.edit_sequences[0]['ranges'][0][1]=2
         self.assertEqual(sequence_layout(combined)[2],2000)
         group=w.new_organized_folder('edit','조합 묶음')
@@ -152,7 +152,7 @@ class OrganizationUITests(unittest.TestCase):
         asset=self.find('asset').data(0,Qt.ItemDataRole.UserRole)
         tabs=w.timeline.sequence_tabs
         self.assertTrue(w.handle_organization_drop([asset],tabs,QPointF(400,10)))
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         self.assertEqual(w.preview.timeline_duration(),7188)
         rect=tabs.tabRect(tabs.currentIndex())
         self.assertTrue(w.handle_organization_drop([asset],tabs,QPointF(rect.center())))
@@ -163,7 +163,7 @@ class OrganizationUITests(unittest.TestCase):
         w.create_edit_sequence(A,[(0,1)],7.188)
         self.select(self.find('media'),w.media.project_tree);w.delete_organized('library')
         self.assertEqual(w.project.library_items,[])
-        self.assertEqual(len(w.project.edit_sequences),1)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),1)
         self.assertEqual(Path(A).read_bytes(),before)
     def test_folder_cycle_drag_rejected(self):
         w=self.w

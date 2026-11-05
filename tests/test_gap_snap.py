@@ -164,7 +164,7 @@ class GapSnapUITests(unittest.TestCase):
         w.redo_subtitle();self.assertEqual(w.active_sequence()['clips'][4]['at'],1)
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'snap.avsp';self.assertTrue(w.save_current(path=path))
-            self.assertEqual(load_project(path).edit_sequences,[w.active_sequence()])
+            self.assertEqual([s for s in load_project(path).edit_sequences if not s.get("parent_id")],[w.active_sequence()])
 
     def test_deep_drag_keeps_overwrite_preview_and_undo(self):
         c=self.w.timeline.canvas

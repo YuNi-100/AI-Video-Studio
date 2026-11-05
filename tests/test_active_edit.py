@@ -78,7 +78,7 @@ class ActiveEditTests(unittest.TestCase):
         self.assert_active('b',2,2)
         tree=w.timeline.sequence_tree;tree.setFocus()
         QTest.keyClick(tree,Qt.Key.Key_Delete)
-        self.assertEqual([s['id'] for s in w.project.edit_sequences],['a'])
+        self.assertEqual([s['id'] for s in w.project.edit_sequences if not s.get('parent_id')],['a'])
         self.assertEqual(len(sequence_clips(w.project.edit_sequences[0])),2)
 
     def test_original_tab_clears_edit_selection(self):

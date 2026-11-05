@@ -27,7 +27,7 @@ def search_edits(project, query='', kind='all'):
     offsets = {p: v['video'] for p, v in project.media_placements.items()}
     results = []
     for seq in project.edit_sequences:
-        if kind != 'tags':
+        if kind != 'tags' and not seq.get('parent_id'):
             for cue in sequence_layout(seq, project.subtitles, offsets)[1]:
                 if needle in normalize(cue['text']):
                     results.append(dict(sequence=seq['id'], name=seq['name'], kind='대사', start=cue['start'], end=cue['end'], text=cue['text']))

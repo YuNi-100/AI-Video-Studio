@@ -177,7 +177,7 @@ class WorkspaceTests(unittest.TestCase):
         for item in lower.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive):
             if item.data(0,Qt.ItemDataRole.UserRole)[0]=='asset':item.setSelected(True)
         w.edit_from_selected_assets()
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         self.assertEqual(w.preview.timeline_duration(),10188)
         self.assertEqual(w.documents[0]['project'].media_paths,[A])
     def test_timeline_drop_inserts_at_position_and_undo(self):

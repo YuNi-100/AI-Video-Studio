@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QTreeWidgetItem,QInputDialog,QMenu,QApplication
 from PySide6.QtGui import QShortcut,QKeySequence
 from app.core.project import validate_display_name
 from app.ui.type_icons import type_icon
+from app.features.edit_groups import visible_edit,asset_key
 from app.features.silence.sequence import (sequence_clips,sequence_layout,sequence_sources,combine_sequences,validate_sequence,insert_sources)
 
 
@@ -110,10 +111,16 @@ class OrganizerWorkflow:
         try:name=validate_display_name(name)
         except ValueError as exc:self.statusBar().showMessage(str(exc));return False
         record['name']=name
+        if data[0]=='asset' and self.asset_state(record):self.asset_state(record)['name']=name
+        if record.get('parent_id'):
+            parent=next(s for s in self.project.edit_sequences if s['id']==record['parent_id'])
+            parent['clips']=[dict(c,label=name) if c.get('source',parent['source'])==record['source'] else c for c in sequence_clips(parent)]
         if data[0]=='media':
             names=self.media.names();names[record['source']]=name
             self.media.restore(self.media.paths(),self.media.selected_path(),names)
-        self.mark_dirty();return True
+        self.mark_dirty()
+        if self.active_edit_id==(asset_key(record) if data[0]=='asset' else record.get('id')):self.show_source_subtitles(force=True)
+        return True
 
     def rename_edit_tab(self,index):
         key=self.timeline.sequence_tabs.tabData(index)
@@ -125,6 +132,7 @@ class OrganizerWorkflow:
         self.project.edit_locations[key]=folder
 
     def open_edit_sequence(self,key):
+        self._requested_edit_id=key
         self.closed_sequence_ids.discard(key);self.sync_sequence_tabs()
         index=next((i for i in range(self.timeline.sequence_tabs.count()) if self.timeline.sequence_tabs.tabData(i)==key),0)
         if self.active_edit_id==key and self.timeline.sequence_tabs.currentIndex()==index:return
@@ -138,7 +146,7 @@ class OrganizerWorkflow:
         self.media.project_tree.setCurrentItem(None)
         tree=self.timeline.sequence_tree
         item=next((r for r in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive)
-                   if r.data(0,Qt.ItemDataRole.UserRole)==('sequence',self.active_document_id,self.active_edit_id)),None)
+                   if r.data(0,Qt.ItemDataRole.UserRole)==('sequence',self.active_document_id,self.active_edit_id) or r.data(0,Qt.ItemDataRole.UserRole)[0]=='asset' and asset_key(self.record_for(r.data(0,Qt.ItemDataRole.UserRole)))==self.active_edit_id),None)
         with QSignalBlocker(tree):
             tree.clearSelection()
             tree.setCurrentItem(item)
@@ -157,7 +165,7 @@ class OrganizerWorkflow:
         for tree,area in ((self.media.project_tree,'library'),(self.timeline.sequence_tree,'edit')):
             oldscroll=tree.verticalScrollBar().value()
             current_data=tuple(tree.currentItem().data(0,role)) if tree.currentItem() and tree.currentItem().data(0,role) else None
-            expanded={tuple(item.data(0,role)):item.isExpanded() for item in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive) if item.data(0,role) and item.data(0,role)[0]=='folder'}
+            expanded={tuple(item.data(0,role)):item.isExpanded() for item in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive) if item.data(0,role) and (item.data(0,role)[0]=='folder' or item.childCount())}
             selected={tuple(item.data(0,role)) for item in tree.selectedItems() if item.data(0,role)}
             with QSignalBlocker(tree):
                 tree.clear();nodes={None:tree};pending=list(self.organized_folders(area))
@@ -174,8 +182,12 @@ class OrganizerWorkflow:
                     item.setIcon(0,type_icon('original' if area=='library' else 'asset'))
                     item.setToolTip(0,row['source'])
                 if area=='edit':
-                    for seq in self.project.edit_sequences:
-                        item=QTreeWidgetItem(nodes.get(self.project.edit_locations.get(seq['id']),tree),[seq['name'],'조합' if seq.get('kind')=='composition' else '편집본'])
+                    group_nodes={}
+                    ordered=[s for s in self.project.edit_sequences if visible_edit(s)]+[s for s in self.project.edit_sequences if s.get('parent_id')]
+                    for seq in ordered:
+                        item=QTreeWidgetItem(group_nodes.get(seq.get('parent_id'),nodes.get(self.project.edit_locations.get(seq['id']),tree)),[seq['name'],'조합' if seq.get('kind')=='composition' else '편집본'])
+                        group_nodes[seq['id']]=item
+                        if seq.get('parent_id'):item.setText(1,'수정본')
                         item.setData(0,role,('sequence',self.active_document_id,seq['id']))
                         item.setIcon(0,type_icon('composition' if seq.get('kind')=='composition' else 'sequence'))
                         item.setToolTip(0,'독립 복사 조합: '+', '.join(seq.get('components',[])) if seq.get('kind')=='composition' else seq['name'])
@@ -184,7 +196,7 @@ class OrganizerWorkflow:
                 active=None
                 for item in tree.findItems('',Qt.MatchFlag.MatchContains|Qt.MatchFlag.MatchRecursive):
                     data=item.data(0,role)
-                    if data[0]=='folder':
+                    if data[0]=='folder' or item.childCount():
                         item.setExpanded(expanded.get(tuple(data),True));tree.disclosure(item,item.isExpanded())
                     if tuple(data) in selected:item.setSelected(True)
                     if tuple(data)==current_data:tree.setCurrentItem(item,0,tree.selectionModel().SelectionFlag.NoUpdate)
@@ -231,10 +243,18 @@ class OrganizerWorkflow:
                         if fid==key:self.project.edit_locations[sid]=parent
                 self.organized_folders(area).remove(record)
             elif d[0]=='media':self.project.library_items.remove(record)
-            elif d[0]=='asset':self.project.edit_assets.remove(record)
+            elif d[0]=='asset':
+                key=asset_key(record)
+                if self.active_edit_id==key:self.timeline.sequence_tabs.setCurrentIndex(0)
+                self.project.edit_sequences[:]=[s for s in self.project.edit_sequences if s['id']!=key]
+                self.project.edit_assets.remove(record)
             elif d[0]=='sequence':
                 if self.active_edit_id==record['id']:self.timeline.sequence_tabs.setCurrentIndex(0)
-                self.project.edit_sequences.remove(record);self.project.edit_locations.pop(record['id'],None)
+                if record.get('parent_id'):
+                    empty=validate_sequence(dict(record,clips=[],ranges=[],timeline_captions=[]))
+                    self.sync_committed_group(record,empty)
+                self.project.edit_sequences[:]=[s for s in self.project.edit_sequences if s['id']!=record['id'] and s.get('parent_id')!=record['id']]
+                self.project.edit_locations={k:v for k,v in self.project.edit_locations.items() if any(s['id']==k for s in self.project.edit_sequences)}
                 self.closed_sequence_ids.discard(record['id'])
         used={r['source'] for r in (self.project.library_items or [])+self.project.edit_assets}
         for seq in self.project.edit_sequences:used.update(sequence_sources(seq))
@@ -253,7 +273,10 @@ class OrganizerWorkflow:
     def snapshot_organized(self,data):
         row=self.record_for(data)
         if row is None:return None
-        if data[0]!='folder':return dict(kind=data[0],row=deepcopy(row))
+        if data[0]!='folder':
+            record=deepcopy(row)
+            if data[0]=='asset' and self.asset_state(row):record['_work_state']=deepcopy(self.asset_state(row))
+            return dict(kind=data[0],row=record)
         area=data[2];key=row['id']
         children=[('folder',self.active_document_id,area,r['id']) for r in self.organized_folders(area) if r['parent']==key]
         children+=[('media',self.active_document_id,r['source'],r['id']) if area=='library' else ('asset',self.active_document_id,r['id']) for r in self.organized_references(area) or [] if r.get('folder')==key]
@@ -274,13 +297,16 @@ class OrganizerWorkflow:
         if kind=='sequence':
             if len(self.project.edit_sequences)>=1000:raise ValueError('편집본은 최대 1000개입니다.')
             if area=='library':raise ValueError('편집본은 편집본 목록에 붙여넣어 주세요.')
-            row['id']=uuid4().hex;row['name']+=' 복사';self.project.edit_sequences.append(row);self.project.edit_locations[row['id']]=folder
+            row['id']=uuid4().hex;row['name']+=' 복사';row.pop('parent_id',None);self.project.edit_sequences.append(row);self.project.edit_locations[row['id']]=folder
             sources=sequence_sources(row)
         else:
             if len(self.organized_references(area))>=10000:raise ValueError("자료는 최대 10000개입니다.")
             if area=='library' and any(str(Path(r['source']).resolve()).casefold()==str(Path(row['source']).resolve()).casefold() for r in self.project.library_items or []):
                 return
+            work=row.pop('_work_state',None)
             row.update(id=uuid4().hex,folder=folder)
+            if work and area=='edit':
+                work.update(id=asset_key(row),name=row['name']);work.pop('parent_id',None);self.project.edit_sequences.append(validate_sequence(work))
             self.organized_references(area).append(row);sources={row['source']}
         paths=list(dict.fromkeys(self.media.paths()+list(sources)))
         self.media.restore(paths,self.media.selected_path() or paths[0],self.media.names())
@@ -317,30 +343,45 @@ class OrganizerWorkflow:
         if 0<=target<len(siblings):
             a,b=rows.index(row),rows.index(siblings[target]);rows[a],rows[b]=rows[b],rows[a];self.mark_dirty()
 
+    def build_organizer_menu(self,tree,area,item=None):
+        records=self.selected_records(area)
+        selected=[self.record_for(d) for d in records]
+        selected=[r for r in selected if r]
+        menu=QMenu(self)
+        def action(text,callback,enabled=True,tip=None):
+            control=menu.addAction(text,callback);control.setEnabled(enabled)
+            if tip:control.setToolTip(tip)
+            return control
+        action('새 폴더',lambda:self.new_organized_folder(area))
+        action('이름 변경',lambda:self.rename_organized(area),len(selected)==1)
+        reorder=len(selected)==1 and not selected[0].get('parent_id')
+        action('위로 이동',lambda:self.reorder_organized(area,-1),reorder,'목록 순서만 변경합니다. 타임라인 재생 순서는 바뀌지 않습니다.')
+        action('아래로 이동',lambda:self.reorder_organized(area,1),reorder,'목록 순서만 변경합니다. 타임라인 재생 순서는 바뀌지 않습니다.')
+        action('복사',lambda:self.copy_organized(area),bool(selected))
+        action('붙여넣기',lambda:self.paste_organized(area),bool(self.organizer_clipboard))
+        action('목록에서 삭제' if area=='library' else '목록에서 제거',lambda:self.delete_organized(area),bool(selected))
+        if area=='edit':
+            menu.addSeparator()
+            action('복사한 컷으로 새 편집본',self.new_edit_from_clipboard,bool(getattr(self,"clip_clipboard",None)))
+            action('선택 자료로 새 편집본',self.edit_from_selected_assets,any(d[0]=='asset' for d in records))
+            action('선택 편집본 조합',self.compose_selected,sum(d[0]=='sequence' for d in records)>=2)
+            action('편집본 열기',lambda:self.organized_clicked(item,area) if item else None,len(selected)==1 and bool(item) and item.data(0,Qt.ItemDataRole.UserRole)[0] in ('asset','sequence'))
+        else:
+            action('원본 미리보기',self.preview_library_source,len(selected)==1 and bool(item) and item.data(0,Qt.ItemDataRole.UserRole)[0]=='media')
+            action('미디어 추가…',self.media.choose_files)
+        return menu
+
     def organizer_menu(self,tree,area,point):
         item=tree.itemAt(point)
         if item and not item.isSelected():tree.clearSelection();tree.setCurrentItem(item)
-        menu=QMenu(self)
-        menu.addAction('새 폴더',lambda:self.new_organized_folder(area))
-        menu.addAction('이름 변경',lambda:self.rename_organized(area))
-        menu.addAction('위로 이동',lambda:self.reorder_organized(area,-1))
-        menu.addAction('아래로 이동',lambda:self.reorder_organized(area,1))
-        menu.addAction('복사',lambda:self.copy_organized(area))
-        paste=menu.addAction('붙여넣기',lambda:self.paste_organized(area));paste.setEnabled(bool(self.organizer_clipboard))
-        menu.addAction('목록에서 삭제' if area=='library' else '목록에서 제거',lambda:self.delete_organized(area))
-        if area=='edit':
-            menu.addSeparator();menu.addAction('복사한 컷으로 새 편집본',self.new_edit_from_clipboard)
-            menu.addAction('선택 자료로 새 편집본',self.edit_from_selected_assets)
-            menu.addAction('선택 편집본 조합',self.compose_selected)
-            menu.addAction('편집본 열기',lambda:self.organized_clicked(item,area) if item else None)
-        else:
-            menu.addAction('원본 미리보기',self.preview_library_source)
-            menu.addAction('미디어 추가…',self.media.choose_files)
-        menu.exec(tree.viewport().mapToGlobal(point))
+        self.build_organizer_menu(tree,area,item).exec(tree.viewport().mapToGlobal(point))
 
     def edit_from_selected_assets(self):
         records=[self.record_for(d) for d in self.selected_records('edit') if d[0]=='asset']
-        if records:self.create_labeled_edit([r['source'] for r in records],[r['name'] for r in records],self.current_folder('edit'))
+        if records:
+            seq=combine_sequences([self.asset_part(r) for r in records],self.project.subtitles,name='편집본 '+str(1+sum(visible_edit(s) for s in self.project.edit_sequences)))
+            seq.pop('kind',None);seq.pop('components',None)
+            self.project.edit_sequences.append(seq);self.assign_edit_folder(seq['id']);self.mark_dirty();self.open_edit_sequence(seq['id'])
     def labeled_insert(self,seq,items,position,labels):
         candidate=insert_sources(seq,items,position,self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})
         start=position/1000;end=start+sum(d for _,d in items)
@@ -448,7 +489,9 @@ class OrganizerWorkflow:
                     parts.append(row);allitems+=self.source_items(list(sequence_sources(row)))
                 else:
                     items=self.source_items([row['source']]);allitems+=items
-                    part=self.new_drop_sequence(items);part=self.labeled_insert(dict(part,clips=[],ranges=[]),items,0,[row['name']]);part['name']=row['name'];parts.append(part)
+                    if value['kind']=='asset':part=self.asset_part(row)
+                    else:part=self.new_drop_sequence(items);part=self.labeled_insert(dict(part,clips=[],ranges=[]),items,0,[row['name']])
+                    part['name']=row['name'];parts.append(part)
             if not parts:return False
             key=target[1] if kind=='tab' else target[2] if kind=='sequence' and target else self.active_edit_id
             seq=next((s for s in self.project.edit_sequences if s['id']==key),None)
@@ -466,7 +509,7 @@ class OrganizerWorkflow:
                 else:self.pending_seek=(at,False)
                 self.timeline.set_position(at)
             else:
-                seq=combine_sequences(parts,self.project.subtitles,offsets,'조합 편집본' if any(v['kind']=='sequence' for v in flat) else '편집본 '+str(len(self.project.edit_sequences)+1))
+                seq=combine_sequences(parts,self.project.subtitles,offsets,'조합 편집본' if any(v['kind']=='sequence' for v in flat) else '편집본 '+str(sum(visible_edit(s) for s in self.project.edit_sequences)+1))
                 if all(v['kind']!='sequence' for v in flat):seq.pop('kind',None);seq.pop('components',None)
                 self.project.edit_sequences.append(seq);self.assign_edit_folder(seq['id']);self.mark_dirty();self.open_edit_sequence(seq['id'])
             return True

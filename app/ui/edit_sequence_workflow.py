@@ -12,8 +12,9 @@ class EditSequenceWorkflow:
         return next((s for s in self.project.edit_sequences if s['id']==self.active_edit_id),None)
 
     def sync_sequence_tabs(self):
+        self.sync_all_group_children()
         tabs = self.timeline.sequence_tabs
-        desired = [(None,'원본')] + [(s['id'],s['name']) for s in self.project.edit_sequences if s['id'] not in self.closed_sequence_ids]
+        desired = [(None,'원본')] + [(s['id'],s['name']) for s in self.project.edit_sequences if s['id'] not in self.closed_sequence_ids and (not s.get('parent_id') and not s['id'].startswith('asset-') or s['id'] in (self.active_edit_id,getattr(self,'_requested_edit_id',None)))]
         existing = [(tabs.tabData(i),tabs.tabText(i)) for i in range(tabs.count())]
         if desired != existing:
             with QSignalBlocker(tabs):
@@ -34,6 +35,7 @@ class EditSequenceWorkflow:
             listing.clear()
             listing.addItem('원본')
             for seq in self.project.edit_sequences:
+                if (seq.get('parent_id') or seq['id'].startswith('asset-')) and seq['id']!=self.active_edit_id:continue
                 count=sum(c['track']=='video' for c in sequence_clips(seq))
                 listing.addItem(f"{seq['name']} · {count}컷")
                 listing.item(listing.count()-1).setToolTip(seq['source'])
@@ -285,6 +287,7 @@ class EditSequenceWorkflow:
         selected_ids={canvas.segments[i].get('id') for i in canvas.selected_subtitles if i<len(canvas.segments)}-{None}
         cues=sequence_layout(candidate,self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})[1]
         subtitles={i for i,r in enumerate(cues) if r.get('id') in selected_ids}
+        self.sync_committed_group(seq,candidate)
         self.restore_sequence((candidate,selected,self.preview.timeline_position() if position is None else position,keys,subtitles))
         self.statusBar().showMessage(message+' · Ctrl+Z로 실행 취소 · 프로젝트를 저장하세요.')
 

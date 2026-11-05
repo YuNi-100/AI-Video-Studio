@@ -92,6 +92,7 @@ class TimelineFocusTests(unittest.TestCase):
             QTest.keyClick(tree,Qt.Key.Key_Space)
             QTest.keyClick(tree,Qt.Key.Key_Right)
             split.assert_not_called();toggle.assert_not_called();seek.assert_not_called()
+        tree.setCurrentItem(tree.topLevelItem(0))
         with patch.object(w,'delete_sequence_clip') as cut_delete:
             QTest.keyClick(tree,Qt.Key.Key_Delete)
             cut_delete.assert_not_called()

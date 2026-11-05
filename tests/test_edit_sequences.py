@@ -112,7 +112,7 @@ class SequenceUITests(unittest.TestCase):
             self.assertEqual(w.preview.timeline_duration(),3000)
         w.close_edit_sequence(1)
         self.assertIsNone(w.active_sequence())
-        self.assertEqual(len(w.project.edit_sequences),2)
+        self.assertEqual(len([s for s in w.project.edit_sequences if not s.get("parent_id")]),2)
         self.assertEqual(len(w.closed_sequence_ids),1)
     def test_playback_skips_cut_and_scrub_maps(self):
         w=self.w

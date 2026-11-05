@@ -31,7 +31,7 @@ class ProjectTree(QTreeWidget):
 
     def disclosure(self,item,expanded):
         data=item.data(0,Qt.ItemDataRole.UserRole)
-        if data and data[0] in ('folder','project'):
+        if data and (data[0] in ('folder','project') or item.childCount()):
             text=item.text(0)
             if text.startswith(('▾  ','▸  ')):text=text[3:]
             item.setText(0,('▾  ' if expanded else '▸  ')+text)
@@ -39,7 +39,7 @@ class ProjectTree(QTreeWidget):
     def mousePressEvent(self,event):
         self._fold_click=False
         item=self.itemAt(event.position().toPoint())
-        if item and item.data(0,Qt.ItemDataRole.UserRole) and item.data(0,Qt.ItemDataRole.UserRole)[0] in ('folder','project') and event.button()==Qt.MouseButton.LeftButton and event.position().x()<self.visualItemRect(item).left()+23:
+        if item and item.data(0,Qt.ItemDataRole.UserRole) and (item.data(0,Qt.ItemDataRole.UserRole)[0] in ('folder','project') or item.childCount()) and event.button()==Qt.MouseButton.LeftButton and event.position().x()<self.visualItemRect(item).left()+23:
             self._fold_click=True
             item.setExpanded(not item.isExpanded())
             event.accept()

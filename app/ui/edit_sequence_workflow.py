@@ -3,6 +3,7 @@ from copy import deepcopy
 from uuid import uuid4
 from pathlib import Path
 from PySide6.QtCore import QSignalBlocker
+from app.features.timeline_actions import delete_items, gap_at, close_gap, snap_move, safe_move
 from app.features.silence.sequence import validate_sequence, sequence_layout, sequence_clips, edit_clip, delete_clip, split_clip, sequence_sources, move_clips, delete_clips, move_timeline_items
 
 
@@ -83,6 +84,7 @@ class EditSequenceWorkflow:
         if self.preview._playing:
             self.preview.toggle_play()
         self.active_edit_id=tabs.tabData(index)
+        self.timeline.canvas.selected_gap=None
         self.timeline.canvas.selected_keys=set()
         self.timeline.canvas.individual_selection=False
         self.timeline.canvas.selected_subtitles=set()
@@ -156,7 +158,7 @@ class EditSequenceWorkflow:
         selected=canvas.selected_clip is not None and canvas.selected_clip<len(sequence_clips(seq))
         self.timeline.split_button.setEnabled(selected)
         self.timeline.delete_button.setEnabled(selected or bool(canvas.selected_subtitles))
-        self.timeline.hint.setText('빈 곳 드래그: 세트 선택 · Ctrl+클릭: 추가/해제 · Alt+클릭: 개별 · Shift: 뒤 항목 함께 · Ctrl+K: 분할 · Ctrl+C/V: 컷 복사/삽입 · Esc: 해제')
+        self.timeline.hint.setText('빈 곳 드래그: 세트 선택 · Ctrl+클릭: 추가/해제 · Alt+클릭: 개별 · Shift: 뒤 항목 함께 · Ctrl+K: 분할 · Delete: 자리 유지 삭제 · Alt+Backspace: 붙여 삭제 · 끝 근처: 맞춤 · Esc: 해제')
         self.timeline.info.setText(f"자막 {len(cues)}개 · {sum(c['track']=='video' for c in sequence_clips(seq))}개 컷")
         self.timeline.update_scroll()
         canvas.update()
@@ -169,6 +171,7 @@ class EditSequenceWorkflow:
         if self.preview._playing:
             self.preview.toggle_play()
         canvas=self.timeline.canvas
+        canvas.selected_gap=None
         seq=self.active_sequence()
         clips=sequence_clips(seq)
         already=index in (canvas.selected_subtitles if track=='subtitle' else canvas.selected_keys)
@@ -196,8 +199,9 @@ class EditSequenceWorkflow:
         self.timeline.canvas.update()
 
     def timeline_edit_candidate(self,index,mode,delta,ripple,track='video'):
-        seq=self.active_sequence();canvas=self.timeline.canvas
-        seq=dict(seq,timeline_captions=deepcopy(canvas.segments))
+        original=self.active_sequence();canvas=self.timeline.canvas
+        canvas.snap_guide=None;canvas.snap_insert=False;canvas.edit_blocked=False
+        seq=dict(original,timeline_captions=deepcopy(canvas.segments))
         linked=seq.get('linked',True)
         if canvas.individual_selection:
             seq['linked']=False
@@ -206,7 +210,14 @@ class EditSequenceWorkflow:
                 if r.get('owner') in groups or i in canvas.selected_subtitles:
                     r.pop('owner',None);r['detached']=True
         if mode=='move':
-            result=move_timeline_items(seq,canvas.selected_keys,canvas.selected_subtitles,delta,ripple,canvas.segments)
+            tolerance=round(8*canvas.span/max(1,canvas.width()-107))
+            snapped=snap_move(seq,canvas.selected_keys,delta,tolerance) if not ripple and canvas.selected_keys else None
+            if snapped:
+                canvas.snap_guide=snapped[1];canvas.snap_insert=True
+                if snapped[0]==0:return original
+                result=safe_move(seq,canvas.selected_keys,canvas.selected_subtitles,snapped[0])
+            else:
+                result=move_timeline_items(seq,canvas.selected_keys,canvas.selected_subtitles,delta,ripple,canvas.segments)
             result['linked']=linked
             return result
         if track=='subtitle':
@@ -234,6 +245,8 @@ class EditSequenceWorkflow:
             canvas.drag_destinations=[b for b in sequence_layout(candidate)[0] if sequence_clips(candidate)[b[4]]['group'] in groups]
             return sequence_layout(candidate,self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})[:2]
         except ValueError:
+            self.timeline.canvas.snap_guide=None;self.timeline.canvas.snap_insert=False
+            self.timeline.canvas.edit_blocked=True;self.timeline.canvas.drag_destinations=[]
             return self.timeline.canvas.blocks,self.timeline.canvas.segments
 
     def sequence_snapshot(self):
@@ -281,6 +294,7 @@ class EditSequenceWorkflow:
         self.timeline.canvas.selected_track=clips[self.timeline.canvas.selected_clip]['track'] if self.timeline.canvas.selected_clip is not None else None
         self.timeline.canvas.selected_keys=keys
         self.timeline.canvas.selected_subtitles=set(snapshot[4]) if len(snapshot)>4 else set()
+        self.timeline.canvas.selected_gap=None
         self.timeline.canvas.preview_blocks=None
         self.timeline.canvas.preview_segments=None
         self.timeline.canvas.drag=None
@@ -295,23 +309,57 @@ class EditSequenceWorkflow:
             return
         try:
             candidate=self.timeline_edit_candidate(index,mode,delta,ripple,track)
-            self.commit_sequence(candidate,'뒤 컷 함께 조정' if ripple else '컷 조정')
+            self.commit_sequence(candidate,'끝 맞춤 · 컷 길이 보존' if self.timeline.canvas.snap_insert else '뒤 컷 함께 조정' if ripple else '컷 조정')
         except ValueError as exc:
             self.statusBar().showMessage(str(exc))
 
-    def delete_sequence_clip(self):
+    def timeline_gap_at(self,position,track):
         seq=self.active_sequence()
-        if not seq:
+        if not seq:return None
+        result=gap_at(dict(seq,timeline_captions=self.timeline.canvas.segments),position/1000,track)
+        return tuple(round(t*1000) for t in result) if result else None
+
+    def select_timeline_gap(self,track,start,end):
+        if not self.active_sequence() or not self.resolve_subtitle_edit():return
+        self.clear_workspace_selection()
+        canvas=self.timeline.canvas
+        canvas.selected_gap=(track,start,end)
+        canvas.gap_linked=self.active_sequence().get('linked',True)
+        if self.preview._playing:self.preview.toggle_play()
+        self.seek_transport(start)
+        self.timeline.delete_button.setEnabled(False)
+        self.statusBar().showMessage('빈칸 선택 · Backspace / Alt+Backspace로 뒤 항목을 당겨 닫습니다.')
+        canvas.update()
+
+    def close_timeline_gap(self):
+        canvas=self.timeline.canvas
+        if not self.active_sequence() or not canvas.selected_gap:return
+        track,start,end=canvas.selected_gap
+        try:
+            seq=dict(self.active_sequence(),timeline_captions=deepcopy(canvas.segments))
+            self.commit_sequence(close_gap(seq,start/1000,end/1000,track),'빈칸 닫기 · 컷 길이 보존')
+        except ValueError as exc:self.statusBar().showMessage(str(exc))
+
+    def delete_sequence_clip(self,ripple=False):
+        seq=self.active_sequence()
+        if not seq or not self.resolve_subtitle_edit() or self.subtitle_job.busy:return
+        canvas=self.timeline.canvas
+        if canvas.selected_gap is not None:
+            if ripple:self.close_timeline_gap()
             return
         try:
-            canvas=self.timeline.canvas
-            if canvas.selected_subtitles:
-                candidate=dict(seq,timeline_captions=[r for i,r in enumerate(canvas.segments) if i not in canvas.selected_subtitles])
-                if canvas.selected_keys:candidate=delete_clips(candidate,canvas.selected_keys)
-                self.commit_sequence(validate_sequence(candidate),'선택 항목 삭제')
-            else:self.commit_sequence(delete_clips(seq,canvas.selected_keys or {canvas.selected_clip}) if canvas.selected_clip is not None else delete_clip(seq,-1),'컷 삭제 · 뒤 컷 자동 당김')
-        except ValueError as exc:
-            self.statusBar().showMessage(str(exc))
+            rows=deepcopy(canvas.segments)
+            linked=seq.get('linked',True)
+            if canvas.individual_selection:
+                groups={sequence_clips(seq)[i]['group'] for i in canvas.selected_keys if sequence_clips(seq)[i]['track']=='video'}
+                for i,row in enumerate(rows):
+                    if row.get('owner') in groups and i not in canvas.selected_subtitles:
+                        row.pop('owner',None);row['detached']=True
+            candidate=dict(seq,linked=False if canvas.individual_selection else linked,timeline_captions=rows)
+            result=delete_items(candidate,canvas.selected_keys,canvas.selected_subtitles,ripple)
+            result['linked']=linked
+            self.commit_sequence(result,'붙여 삭제 · 뒤 항목 당김' if ripple else '선택 항목만 삭제 · 뒤 컷 위치 유지')
+        except ValueError as exc:self.statusBar().showMessage(str(exc))
 
     def split_sequence_clip(self):
         seq=self.active_sequence()

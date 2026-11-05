@@ -16,6 +16,8 @@ class TrackCanvas(QWidget):
     copy_requested = Signal()
     paste_requested = Signal()
     delete_requested = Signal()
+    ripple_delete_requested = Signal()
+    gap_selected = Signal(str,int,int)
     seek_requested = Signal(int)
     subtitle_selected = Signal(int)
     block_moved = Signal(str, int, int)
@@ -34,6 +36,12 @@ class TrackCanvas(QWidget):
         self.blocks = []
         self.sequence_view = False
         self.selected_keys = set()
+        self.selected_gap=None
+        self.gap_linked=True
+        self.gap_probe=None
+        self.snap_guide=None
+        self.snap_insert=False
+        self.edit_blocked=False
         self.selected_clip = None
         self.selected_track = None
         self.preview_blocks = None
@@ -93,7 +101,14 @@ class TrackCanvas(QWidget):
         for value in range(first,self.offset+self.span+minor,minor):
             x = round(x_at(value))
             p.drawLine(x,top,x,top+row*3)
-        overwrite_preview=bool(self.sequence_view and self.drag and self.drag[5]=='move' and self.drag[4] and not self._ripple)
+        overwrite_preview=bool(self.sequence_view and self.drag and self.drag[5]=='move' and self.drag[4] and not self._ripple and not self.snap_insert)
+        if self.selected_gap is not None:
+            track,a,b=self.selected_gap
+            y=top if self.gap_linked or track=='video' else top+2*row
+            height=row*3 if self.gap_linked else row
+            rect=QRectF(x_at(a),y+3,max(1,x_at(b)-x_at(a)),height-7)
+            p.fillRect(rect,QColor(139,212,203,40))
+            p.setPen(QPen(QColor('#8bd4cb'),1,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(rect)
         for block in (self.preview_blocks if self.preview_blocks is not None and not overwrite_preview else self.blocks):
             track, start, end, name, key = block
             y = top + (0 if track == "video" else 2)*row
@@ -141,7 +156,7 @@ class TrackCanvas(QWidget):
             for track,start,end,name,key in self.drag_destinations:
                 y=top+(0 if track=='video' else 2)*row+4
                 target=QRectF(x_at(start),y,max(3,(end-start)/self.span*width),row-9)
-                if not self._ripple:
+                if not self._ripple and not self.snap_insert:
                     for old_track,a,b,_,old_key in self.blocks:
                         if old_track!=track or old_key in self.selected_keys:continue
                         a,b=max(a,start),min(b,end)
@@ -151,13 +166,18 @@ class TrackCanvas(QWidget):
                             p.fillRect(cut,QBrush(QColor('#ed997b'),Qt.BrushStyle.BDiagPattern))
                 p.setPen(QPen(QColor('#b2e6f0'),2,Qt.PenStyle.DashLine));p.setBrush(QColor(123,210,224,35));p.drawRoundedRect(target,4,4)
             p.restore()
-            p.setPen(QColor('#b2e6f0' if self._ripple else '#edb095'))
-            p.drawText(QRectF(95,167,max(1,self.width()-107),22),'뒤 항목 함께 이동' if self._ripple else '덮어쓰기 · 점선: 놓일 위치 / 빗금: 제거될 부분')
+            if self.snap_guide is not None:
+                p.setPen(QPen(QColor('#8bd4cb'),2));p.drawLine(round(x_at(self.snap_guide)),top,round(x_at(self.snap_guide)),top+row*3)
+            p.setPen(QColor('#8bd4cb' if self.snap_insert else '#b2e6f0' if self._ripple else '#edb095'))
+            message='끝 맞춤 · 컷 길이 보존 / 필요한 뒤 컷 밀기' if self.snap_insert else '이동 불가 · 공통 경계로 옮기세요' if self.edit_blocked else '뒤 항목 함께 이동' if self._ripple else '덮어쓰기 · 점선: 놓일 위치 / 빗금: 제거될 부분'
+            p.drawText(QRectF(95,167,max(1,self.width()-107),22),message)
         x = round(x_at(self.position))
         if left <= x <= self.width()-12:
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor("#e0c8ff"))
             p.drawPolygon(QPolygonF([QPointF(x-5,20),QPointF(x+5,20),QPointF(x,29)]))
+        if self.selected_gap is not None and not self.drag:
+            p.setPen(QColor('#8bd4cb'));p.drawText(QRectF(95,167,max(1,self.width()-107),22),'빈칸 선택 · Backspace / Alt+Backspace: 빈칸 닫기')
         if self.selection_box is not None and self.selection_box.width()>3:
             p.setPen(QPen(QColor("#9edbf0"),1,Qt.PenStyle.DashLine))
             p.setBrush(QColor(135,200,230,40))
@@ -206,6 +226,8 @@ class TrackCanvas(QWidget):
             return
         self.setFocus()
         value = self.value_at(event.position().x())
+        self.selected_gap=None
+        self.snap_guide=None;self.snap_insert=False;self.edit_blocked=False
         if event.position().y() < 30:
             self.navigation = True
             self.scrub_started.emit()
@@ -306,7 +328,7 @@ class TrackCanvas(QWidget):
                 right=95+(hovered[2]-self.offset)/self.span*width
                 edge=right-left>=18 and ((left>=95 and abs(event.position().x()-left)<=6) or (right<=self.width()-12 and abs(event.position().x()-right)<=6))
             self.setCursor(Qt.CursorShape.SizeHorCursor if edge else Qt.CursorShape.OpenHandCursor if hovered else Qt.CursorShape.ArrowCursor)
-            self.setToolTip(('컷이 좁습니다. 확대하면 양 끝을 조절할 수 있습니다.' if right-left<18 else '양 끝: 길이 조절 · 가운데: 이동 · Shift: 뒤 컷 함께 이동') if hovered else '빈 곳 클릭: 재생 위치 이동')
+            self.setToolTip(('컷이 좁습니다. 확대하면 양 끝을 조절할 수 있습니다.' if right-left<18 else '양 끝: 길이 조절 · 가운데: 이동 · Shift: 뒤 컷 함께 이동') if hovered else '컷 사이 공통 빈칸 클릭: 선택 · Backspace: 빈칸 닫기')
             return
         hit = self.subtitle_hit(event.position().x(),event.position().y())
         self.setCursor(Qt.CursorShape.SizeHorCursor if hit and hit[1] != "move" else
@@ -335,8 +357,15 @@ class TrackCanvas(QWidget):
                     if rect.intersects(box):subtitles.append(i)
                 self.range_selected.emit(blocks,subtitles,self._selection_additive)
             else:
-                if not self._selection_additive:self.clear_requested.emit()
-                self.seek_requested.emit(min(self.duration,self.value_at(event.position().x())))
+                value=self.value_at(event.position().x())
+                row=int((event.position().y()-30)//43)
+                track='video' if row==0 else 'audio' if row==2 else None
+                gap=self.gap_probe(value,track) if self.sequence_view and track and self.gap_probe and not self._selection_additive else None
+                if gap:
+                    self.gap_selected.emit(track,*gap)
+                else:
+                    if not self._selection_additive:self.clear_requested.emit()
+                    self.seek_requested.emit(min(self.duration,value))
             self.update();return
         if self.navigation:
             self.seek_requested.emit(min(self.duration,self.value_at(event.position().x())))
@@ -371,6 +400,8 @@ class TrackCanvas(QWidget):
         self.update()
 
     def start_range_selection(self,event):
+        self.selected_gap=None
+        self.snap_guide=None;self.snap_insert=False
         self.selection_origin=QPointF(event.position())
         self.selection_box=QRectF(self.selection_origin,self.selection_origin)
         self._selection_additive=bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -385,7 +416,9 @@ class TrackCanvas(QWidget):
         if not self.sequence_view and self.selected_subtitles and event.key() in (Qt.Key.Key_Delete,Qt.Key.Key_Backspace):
             self.delete_requested.emit();event.accept();return
         if self.sequence_view and not self.drag and not self.navigation:
-            if event.key() in (Qt.Key.Key_Delete,Qt.Key.Key_Backspace) and event.modifiers()==Qt.KeyboardModifier.NoModifier:
+            if event.key()==Qt.Key.Key_Backspace and (event.modifiers()==Qt.KeyboardModifier.AltModifier or (self.selected_gap is not None and event.modifiers()==Qt.KeyboardModifier.NoModifier)):
+                self.ripple_delete_requested.emit();event.accept();return
+            if self.selected_gap is None and event.key() in (Qt.Key.Key_Delete,Qt.Key.Key_Backspace) and event.modifiers()==Qt.KeyboardModifier.NoModifier:
                 self.delete_requested.emit()
                 event.accept()
                 return
@@ -459,7 +492,7 @@ class Timeline(QWidget):
         self.split_button=QPushButton('분할')
         self.split_button.setToolTip('선택 컷을 재생 위치에서 분할 · 타임라인에서 Ctrl+K')
         self.delete_button=QPushButton('삭제')
-        self.delete_button.setToolTip('선택 컷 삭제 후 뒤 컷 당기기 · 타임라인에서 Delete')
+        self.delete_button.setToolTip('선택 컷만 삭제 · Delete/Backspace · Alt+Backspace: 빈틈 없이 삭제')
         bar.addWidget(self.split_button)
         bar.addWidget(self.delete_button)
         self.split_button.hide()
@@ -523,6 +556,9 @@ class Timeline(QWidget):
         self.sequence_tabs.setTabButton(index,QTabBar.ButtonPosition.RightSide,button)
 
     def set_source(self, duration, segments, name, source_duration=None, video=0, audio=0, linked=True):
+        self.canvas.selected_gap=None
+        self.canvas.snap_guide=None
+        self.canvas.snap_insert=False
         self.current_edit.setText('원본 보기'+(' · '+name if name else ''))
         self.current_edit.setToolTip(self.current_edit.text())
         self.canvas.duration = duration

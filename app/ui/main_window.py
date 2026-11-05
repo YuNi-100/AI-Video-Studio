@@ -215,6 +215,9 @@ class MainWindow(ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, Seque
         self.timeline.canvas.edit_preview=self.preview_sequence_edit
         self.timeline.canvas.split_requested.connect(self.split_sequence_clip)
         self.timeline.canvas.delete_requested.connect(self.delete_timeline_selection)
+        self.timeline.canvas.ripple_delete_requested.connect(lambda:self.delete_timeline_selection(True))
+        self.timeline.canvas.gap_selected.connect(self.select_timeline_gap)
+        self.timeline.canvas.gap_probe=self.timeline_gap_at
         self.timeline.canvas.range_selected.connect(self.timeline_range_selected)
         self.timeline.split_button.clicked.connect(self.split_sequence_clip)
         self.timeline.delete_button.clicked.connect(self.delete_sequence_clip)

@@ -123,7 +123,7 @@ class ProjectHistory:
             with QSignalBlocker(self.timeline.scope):
                 self.timeline.scope.setCurrentIndex(snapshot['scope'])
             canvas=self.timeline.canvas
-            canvas.drag=None;canvas.preview_blocks=None;canvas.preview_segments=None
+            canvas.drag=None;canvas.preview_blocks=None;canvas.preview_segments=None;canvas.selected_gap=None
             canvas.selected_clip=snapshot['clip'];canvas.selected_keys=set(snapshot['keys'])
             canvas.selected_subtitles=set(snapshot['captions'])
             selected=project.active_path
@@ -156,7 +156,7 @@ def install_history_actions(window_class):
         'compose_selected','reorder_organized','handle_media_drop','handle_organization_drop','create_labeled_edit',
         'edit_from_selected_assets','begin_timeline_edit','request_timeline_split','create_edit_sequence',
         'commit_sequence','edit_sequence_clip','split_sequence_clip','delete_sequence_clip','delete_timeline_selection',
-        'change_sequence_link','new_edit_from_clipboard','paste_timeline_sets','subtitles_ready','apply_subtitle_edit',
+        'close_timeline_gap','change_sequence_link','new_edit_from_clipboard','paste_timeline_sets','subtitles_ready','apply_subtitle_edit',
         'add_subtitle','remove_subtitle','move_timeline_block','resize_timeline_subtitle','subtitle_terms_changed',
         'subtitle_filter_changed','change_link','reorder_media')
     for name in names:

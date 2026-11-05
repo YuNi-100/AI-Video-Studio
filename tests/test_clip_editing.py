@@ -142,8 +142,8 @@ class ClipUITests(unittest.TestCase):
         self.assertEqual(len(sequence_clips(w.active_sequence())),8)
         QTest.keyClick(c,Qt.Key.Key_Delete)
         self.assertEqual(len(sequence_clips(w.active_sequence())),6)
-        self.assertAlmostEqual(sequence_clips(w.active_sequence())[0]['at'],0)
-        self.assertAlmostEqual(w.preview.timeline_duration(),2500)
+        self.assertAlmostEqual(sequence_clips(w.active_sequence())[0]['at'],.5)
+        self.assertAlmostEqual(w.preview.timeline_duration(),3000)
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'edited.avsp'
             self.assertTrue(w.save_current(path=path))
@@ -196,6 +196,7 @@ class ClipUITests(unittest.TestCase):
         self.assertEqual(w.preview.timeline_duration(),0)
         self.assertFalse(w.preview.video.video_item.isVisible())
         w.undo_subtitle()
-        self.assertEqual(w.preview.timeline_duration(),1000)
+        self.assertEqual(w.preview.timeline_duration(),3000)
+        self.assertEqual(sequence_clips(w.active_sequence())[0]["at"],2)
 
 if __name__=='__main__': unittest.main()

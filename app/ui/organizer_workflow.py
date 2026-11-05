@@ -545,6 +545,7 @@ class OrganizerWorkflow:
 
     def clear_workspace_selection(self):
         canvas=self.timeline.canvas
+        canvas.selected_gap=None
         had_selection=bool(canvas.selected_keys or canvas.selected_subtitles or self.timeline.sequence_tree.selectedItems() or self.media.project_tree.selectedItems())
         canvas.selected_keys=set();canvas.selected_subtitles=set();canvas.selected_clip=None;canvas.selected_track=None
         canvas.individual_selection=False
@@ -553,8 +554,8 @@ class OrganizerWorkflow:
         if had_selection:self.statusBar().showMessage('선택 해제')
         canvas.update()
 
-    def delete_timeline_selection(self):
-        if self.active_sequence():self.delete_sequence_clip();return
+    def delete_timeline_selection(self,ripple=False):
+        if self.active_sequence():self.delete_sequence_clip(ripple);return
         canvas=self.timeline.canvas
         if not canvas.selected_subtitles or not self.resolve_subtitle_edit():return
         source=self.media.selected_path()

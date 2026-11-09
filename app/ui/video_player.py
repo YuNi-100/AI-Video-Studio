@@ -18,6 +18,7 @@ class VideoPlayer(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._sequence_pending = set()
         self.sequence_tracks = None
         self.sequence_ranges = None
@@ -40,6 +41,7 @@ class VideoPlayer(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         frame, layout = panel()
+        self.frame=frame
         outer.addWidget(frame)
         title_row=QHBoxLayout()
         self.status=label("미디어 없음","heading")

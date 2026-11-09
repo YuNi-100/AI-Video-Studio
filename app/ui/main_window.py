@@ -165,8 +165,13 @@ class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflo
         layout.addWidget(header_boundary)
         vertical = QSplitter(Qt.Orientation.Vertical)
         horizontal = QSplitter(Qt.Orientation.Horizontal)
+        self.workspace_vertical=vertical
+        self.workspace_horizontal=horizontal
+        for splitter in (horizontal,vertical):
+            splitter.setHandleWidth(9)
         self.media = MediaPanel()
         self.preview = VideoPlayer()
+        self.preview.setMinimumWidth(320)
         self.preview.name_for_path = self.media.display_name
         self.media.selected.connect(self.open_media)
         self.media.changed.connect(self.mark_dirty)
@@ -250,7 +255,7 @@ class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflo
         self.timeline.scope.currentIndexChanged.connect(self.scope_changed)
         vertical.addWidget(self.timeline)
         vertical.setChildrenCollapsible(False)
-        vertical.setSizes([460, 370])
+        vertical.setSizes([415, 415])
         layout.addWidget(vertical, 1)
         menu = self.menuBar().addMenu("파일")
         for title, shortcut, callback in (

@@ -1,6 +1,7 @@
 """Search rendered edit time, never confuse it with source media time."""
 import math
 import unicodedata
+import hashlib
 from app.features.silence.sequence import sequence_layout
 
 
@@ -21,20 +22,25 @@ def validate_tags(rows):
     return result
 
 
-def search_edits(project, query='', kind='all'):
+def search_edits(project, query='', kind='all', sequence_id=None):
     normalize = lambda s: unicodedata.normalize('NFKC', s).casefold()
     needle = normalize(query.strip())
     offsets = {p: v['video'] for p, v in project.media_placements.items()}
     results = []
     for seq in project.edit_sequences:
-        if kind != 'tags' and not seq.get('parent_id'):
-            for cue in sequence_layout(seq, project.subtitles, offsets)[1]:
+        if sequence_id is not None and seq['id']!=sequence_id:continue
+        if kind != 'tags' and (not seq.get('parent_id') or sequence_id is not None):
+            for index, cue in enumerate(sequence_layout(seq, project.subtitles, offsets)[1]):
                 if needle in normalize(cue['text']):
-                    results.append(dict(sequence=seq['id'], name=seq['name'], kind='대사', start=cue['start'], end=cue['end'], text=cue['text']))
+                    results.append(dict(sequence=seq['id'], name=seq['name'], kind='대사', start=cue['start'], end=cue['end'], text=cue['text'],caption_index=index,cue_id=cue.get('id'),key_sequence=seq.get('parent_id',seq['id'])))
         if kind != 'captions':
             for index, tag in enumerate(seq.get('scene_tags', [])):
                 if needle in normalize(tag['name']):
                     results.append(dict(sequence=seq['id'], name=seq['name'], kind='태그', start=tag['start'], end=tag['end'], text=tag['name'], tag_index=index))
+    for row in results:
+        identity=row.get('cue_id') or repr((row['kind'],row['start'],row['end'],row['text']))
+        row['key']=row.get('key_sequence',row['sequence'])+':'+hashlib.sha256(identity.encode('utf-8')).hexdigest()
+        row['folder']=project.search_locations.get(row['key'])
     return sorted(results, key=lambda r: (r['name'], r['start'], r['kind']))
 
 

@@ -8,10 +8,26 @@ from PySide6.QtGui import QShortcut,QKeySequence
 from app.core.project import validate_display_name
 from app.ui.type_icons import type_icon
 from app.features.edit_groups import visible_edit,asset_key
+from app.ui.project_history import project_action
 from app.features.silence.sequence import (sequence_clips,sequence_layout,sequence_sources,combine_sequences,validate_sequence,insert_sources)
 
 
 class OrganizerWorkflow:
+    @project_action
+    def new_empty_edit(self):
+        if not self.allow_project_switch():return
+        if len(self.project.edit_sequences)>=1000:
+            self.statusBar().showMessage('편집본은 최대 1000개입니다.');return
+        name,ok=QInputDialog.getText(self,'빈 편집본 만들기','편집본 이름',text='빈 편집본')
+        if not ok:return
+        from app.core.project import validate_display_name
+        try:name=validate_display_name(name)
+        except ValueError as exc:self.statusBar().showMessage(str(exc));return
+        seq=validate_sequence(dict(id=uuid4().hex,name=name,source='',duration=1,clips=[],ranges=[],timeline_captions=[],linked=True))
+        self.project.edit_sequences.append(seq);self.assign_edit_folder(seq['id']);self.mark_dirty()
+        self.open_edit_sequence(seq['id'])
+        self.statusBar().showMessage('빈 편집본 생성 · 자료에서 필요한 컷을 복사한 뒤 이 타임라인에 Ctrl+V로 붙여넣으세요.')
+
     def init_organizer(self):
         self.organizer_clipboard=[]
         self.media.project_tree.itemDoubleClicked.connect(lambda item,col:self.rename_organized('library',item))
@@ -348,23 +364,27 @@ class OrganizerWorkflow:
         selected=[self.record_for(d) for d in records]
         selected=[r for r in selected if r]
         menu=QMenu(self)
+        menu.setToolTipsVisible(True)
         def action(text,callback,enabled=True,tip=None):
             control=menu.addAction(text,callback);control.setEnabled(enabled)
-            if tip:control.setToolTip(tip)
+            if tip or not enabled:control.setToolTip(tip or '선택한 항목의 종류·개수 또는 복사한 내용에 따라 사용할 수 있습니다.')
             return control
         action('새 폴더',lambda:self.new_organized_folder(area))
-        action('이름 변경',lambda:self.rename_organized(area),len(selected)==1)
+        if area=='edit':action('빈 편집본 만들기…',self.new_empty_edit,not self.subtitle_job.busy)
+        menu.addSeparator()
+        action('이름 변경',lambda:self.rename_organized(area),len(selected)==1,'이름을 바꿀 항목 하나를 선택하세요.')
         reorder=len(selected)==1 and not selected[0].get('parent_id')
         action('위로 이동',lambda:self.reorder_organized(area,-1),reorder,'목록 순서만 변경합니다. 타임라인 재생 순서는 바뀌지 않습니다.')
         action('아래로 이동',lambda:self.reorder_organized(area,1),reorder,'목록 순서만 변경합니다. 타임라인 재생 순서는 바뀌지 않습니다.')
-        action('복사',lambda:self.copy_organized(area),bool(selected))
-        action('붙여넣기',lambda:self.paste_organized(area),bool(self.organizer_clipboard))
+        menu.addSeparator()
+        action('복사',lambda:self.copy_organized(area),bool(selected),'목록에서 복사할 항목을 선택하세요. 타임라인의 컷 복사와 별개입니다.')
+        action('붙여넣기',lambda:self.paste_organized(area),bool(self.organizer_clipboard),'먼저 목록의 항목을 복사하세요. 컷 붙여넣기는 타임라인에서 Ctrl+V입니다.')
         action('목록에서 삭제' if area=='library' else '목록에서 제거',lambda:self.delete_organized(area),bool(selected))
         if area=='edit':
             menu.addSeparator()
-            action('복사한 컷으로 새 편집본',self.new_edit_from_clipboard,bool(getattr(self,"clip_clipboard",None)))
-            action('선택 자료로 새 편집본',self.edit_from_selected_assets,any(d[0]=='asset' for d in records))
-            action('선택 편집본 조합',self.compose_selected,sum(d[0]=='sequence' for d in records)>=2)
+            action('복사한 컷으로 새 편집본',self.new_edit_from_clipboard,bool(getattr(self,"clip_clipboard",None)),'먼저 타임라인의 컷을 Ctrl+C로 복사하세요.')
+            action('선택 자료로 새 편집본',self.edit_from_selected_assets,any(d[0]=='asset' for d in records),'재생 아이콘의 자료를 하나 이상 선택하세요.')
+            action('선택 편집본 조합',self.compose_selected,sum(d[0]=='sequence' for d in records)>=2,'Ctrl+클릭으로 편집본을 두 개 이상 선택하세요.')
             action('편집본 열기',lambda:self.organized_clicked(item,area) if item else None,len(selected)==1 and bool(item) and item.data(0,Qt.ItemDataRole.UserRole)[0] in ('asset','sequence'))
         else:
             action('원본 미리보기',self.preview_library_source,len(selected)==1 and bool(item) and item.data(0,Qt.ItemDataRole.UserRole)[0]=='media')

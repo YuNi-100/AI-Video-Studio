@@ -20,6 +20,8 @@ class Project:
     edit_folders: list[dict] = field(default_factory=list)
     edit_assets: list[dict] = field(default_factory=list)
     edit_locations: dict[str, str | None] = field(default_factory=dict)
+    search_folders: list[dict] = field(default_factory=list)
+    search_locations: dict[str, str] = field(default_factory=dict)
 
     def rename(self, name: str) -> bool:
         name = name.strip()

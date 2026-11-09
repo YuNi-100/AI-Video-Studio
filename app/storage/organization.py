@@ -40,10 +40,16 @@ def load_organization(project,data,resolve):
     seqids={s['id'] for s in project.edit_sequences};folderids={r['id'] for r in project.edit_folders}
     if any(key not in seqids or folder not in folderids|{None} for key,folder in locations.items()):raise ValueError('편집본 폴더 연결이 올바르지 않습니다.')
     project.edit_locations=deepcopy(locations)
+    project.search_folders=folders(data.get('search_folders',[]))
+    locations=data.get('search_locations',{})
+    folderids={r['id'] for r in project.search_folders}
+    if not isinstance(locations,dict) or len(locations)>100000 or any(not isinstance(k,str) or len(k)>160 or v not in folderids for k,v in locations.items()):
+        raise ValueError('검색 분류 정보가 올바르지 않습니다.')
+    project.search_locations=deepcopy(locations)
 
 
 def dump_organization(project,portable):
-    data=dict(library_folders=project.library_folders,edit_folders=project.edit_folders,library_items=project.library_items,edit_assets=project.edit_assets,edit_locations=project.edit_locations)
+    data=dict(library_folders=project.library_folders,edit_folders=project.edit_folders,library_items=project.library_items,edit_assets=project.edit_assets,edit_locations=project.edit_locations,search_folders=project.search_folders,search_locations=project.search_locations)
     # Validate using exactly the same rules before writing.
     from copy import copy
     check=copy(project);load_organization(check,data,lambda p:p)

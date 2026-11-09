@@ -97,7 +97,7 @@ class EditSequenceWorkflow:
         self.timeline.canvas.preview_segments=None
         self.sync_sequence_tabs()
         seq=self.active_sequence()
-        if seq and seq['source']!=str(self.preview.source):
+        if seq and seq['source'] and seq['source']!=str(self.preview.source):
             self._opening_edit_sequence=True
             try:
                 self.media.restore(self.media.paths(),seq['source'],self.media.names())
@@ -138,6 +138,12 @@ class EditSequenceWorkflow:
         if hasattr(self,"video_export_action"):self.video_export_action.setEnabled(bool(sequence_clips(seq)))
         self.preview.edit_name=seq["name"]
         self.preview.set_sequence_clips(sequence_clips(seq))
+        if not sequence_clips(seq):
+            self.preview.stack.setCurrentWidget(self.preview.empty)
+            self.preview.empty.setText('빈 편집본 · 필요한 컷을 붙여넣으세요')
+            self.preview.status.setText(seq['name'])
+        elif self.preview.ready:
+            self.preview.stack.setCurrentWidget(self.preview.video)
         self.preview.set_subtitles(cues)
         self.preview.refresh_title()
         canvas=self.timeline.canvas
@@ -303,6 +309,10 @@ class EditSequenceWorkflow:
             self.preview.toggle_play()
         index=next(i for i,row in enumerate(self.project.edit_sequences) if row['id']==seq['id'])
         self.project.edit_sequences[index]=seq
+        if seq['source'] and seq['source']!=str(self.preview.source):
+            self._opening_edit_sequence=True
+            try:self.open_media(seq['source'])
+            finally:self._opening_edit_sequence=False
         clips=sequence_clips(seq)
         self.timeline.canvas.selected_clip=min(selected,len(clips)-1) if selected is not None and clips else None
         self.timeline.canvas.selected_track=clips[self.timeline.canvas.selected_clip]['track'] if self.timeline.canvas.selected_clip is not None else None

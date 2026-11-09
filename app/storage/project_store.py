@@ -93,7 +93,7 @@ def load_project(path):
         ids = set()
         for value in sequences:
             seq = validate_sequence(value)
-            seq['source'] = local_path(seq['source'], source.parent)
+            seq['source'] = local_path(seq['source'], source.parent) if seq['source'] else ''
             for clip in seq.get('clips',[]):
                 if 'source' in clip:
                     clip['source']=local_path(clip['source'],source.parent)
@@ -157,7 +157,7 @@ def save_project(project, path):
         if not sequence_sources(seq)<=set(paths) or seq['id'] in ids:
             raise ValueError('시퀀스 원본 또는 ID가 올바르지 않습니다.')
         ids.add(seq['id'])
-        seq['source'] = portable(seq['source'])
+        seq['source'] = portable(seq['source']) if seq['source'] else ''
         for clip in seq.get('clips',[]):
             if 'source' in clip:
                 clip['source']=portable(clip['source'])

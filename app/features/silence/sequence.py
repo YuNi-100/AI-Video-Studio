@@ -26,7 +26,8 @@ def validate_sequence(value):
     result={}
     for key,limit in (('id',64),('name',120),('source',32767)):
         text=value.get(key)
-        if not isinstance(text,str) or not text.strip() or len(text)>limit or any(ord(c)<32 for c in text):
+        empty_source=key=='source' and text=='' and value.get('clips')==[]
+        if not empty_source and (not isinstance(text,str) or not text.strip() or len(text)>limit or any(ord(c)<32 for c in text)):
             raise ValueError('시퀀스 이름 또는 원본 정보가 올바르지 않습니다.')
         result[key]=text
     if 'view_base' in value:
@@ -306,7 +307,7 @@ def split_clip(seq,index,position_ms):
 
 
 def sequence_sources(seq):
-    return {seq['source']} | {c.get('source',seq['source']) for c in sequence_clips(seq)}
+    return ({seq['source']} | {c.get('source',seq['source']) for c in sequence_clips(seq)})-{''}
 
 
 def insert_sources(seq,items,position_ms,subtitles=None,video_offsets=None):
@@ -376,7 +377,7 @@ def combine_sequences(sequences,subtitles=None,placements=None,name='조합 편�
                 timeline_captions.append(row)
         scene_tags.extend(dict(t,start=round(t['start']+base,3),end=round(t['end']+base,3)) for t in seq.get('scene_tags',[]))
         base+=sequence_layout(seq)[2]/1000
-    first=sequences[0]
+    first=next((s for s in sequences if s['source']),sequences[0])
     result=dict(id=uuid4().hex,name=name,source=first['source'],duration=first['duration'],clips=clips,ranges=[],linked=True,kind='composition',components=[s['name'] for s in sequences])
     if scene_tags:result['scene_tags']=scene_tags
     if explicit_captions:result['timeline_captions']=sorted(timeline_captions,key=lambda r:r['start'])
@@ -397,6 +398,8 @@ def splice_sequence(target,parts,position_ms,subtitles=None,placements=None):
         else:result.append(c)
     for c in incoming['clips']:result.append(dict(c,at=round(c['at']+position,3)))
     candidate=dict(target,clips=result,kind='composition',components=target.get('components',[target['name']])+[s['name'] for s in parts])
+    if not target['source'] and result:
+        candidate.update(source=incoming['source'],duration=incoming['duration'])
     if incoming.get('scene_tags'):
         candidate['scene_tags']=target.get('scene_tags',[])+[dict(t,start=round(t['start']+position,3),end=round(t['end']+position,3)) for t in incoming['scene_tags']]
     if 'timeline_captions' in target or 'timeline_captions' in incoming:

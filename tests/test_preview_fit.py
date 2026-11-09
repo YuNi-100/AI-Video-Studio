@@ -49,6 +49,44 @@ class PreviewFitTests(unittest.TestCase):
             self.assertTrue(view.sceneRect().contains(view.caption.sceneBoundingRect()))
         finally:view.close();view.deleteLater();QTest.qWait(30)
 
+    def test_late_native_size_does_not_override_frame_orientation(self):
+        view=CaptionVideoView()
+        try:
+            view.frame_changed(self.frame((1080,1920),270))
+            view.native_size_changed(QSizeF(1920,1080))
+            self.assertEqual(view.video_item.size(),QSizeF(1920,1080))
+            view.frame_changed(QVideoFrame())
+            view.native_size_changed(QSizeF(1080,1920))
+            self.assertEqual(view.video_item.size(),QSizeF(1920,1080))
+            view.reset_frame_geometry();view.frame_changed(self.frame((1080,1920)))
+            self.assertEqual(view.video_item.size(),QSizeF(1080,1920))
+        finally:view.close();view.deleteLater();QTest.qWait(30)
+
+    @unittest.skipUnless(os.environ.get('STUDIO_NATIVE_PREVIEW_TEST'),'requires real Windows screen pixels')
+    def test_rotated_frame_refreshes_left_middle_and_right(self):
+        view=CaptionVideoView();view.show();QTest.qWait(30);view.resize(900,360);QTest.qWait(30)
+        def solid(r,g,b):
+            fmt=QVideoFrameFormat(QSize(180,320),QVideoFrameFormat.PixelFormat.Format_RGBA8888)
+            fmt.setRotation(type(fmt.rotation())(270))
+            frame=QVideoFrame(fmt)
+            self.assertTrue(frame.map(QVideoFrame.MapMode.WriteOnly))
+            data=frame.bits(0);data[:frame.mappedBytes(0)]=bytes((r,g,b,255))*(frame.mappedBytes(0)//4)
+            frame.unmap();return frame
+        try:
+            view.videoSink().setVideoFrame(solid(230,30,30));QTest.qWait(100)
+            view.videoSink().setVideoFrame(solid(30,40,230));QTest.qWait(100)
+            # grabWindow reads the visible pixels; QWidget.grab() would repaint
+            # the whole scene and accidentally hide the partial refresh defect.
+            pix=view.screen().grabWindow(view.winId());self.assertFalse(pix.isNull())
+            img=pix.toImage();ratio=pix.devicePixelRatio()
+            rect=view.mapFromScene(view.sceneRect()).boundingRect()
+            for fraction in (.15,.5,.85):
+                x=round((rect.left()+rect.width()*fraction)*ratio);y=round(rect.center().y()*ratio)
+                color=img.pixelColor(x,y)
+                self.assertGreater(color.blue(),180,(fraction,color.name()))
+                self.assertLess(color.red(),80,(fraction,color.name()))
+        finally:view.close();view.deleteLater();QTest.qWait(30)
+
 
 class CompactTimelineTests(unittest.TestCase):
     setUpClass=classmethod(PreviewFitTests.setUpClass.__func__)

@@ -20,6 +20,9 @@ class CaptionVideoView(QGraphicsView):
         self.setFrameShape(QGraphicsView.Shape.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Rotated video frames can invalidate only their unrotated dirty area.
+        # Repaint the complete viewport so the sides never retain older frames.
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.setBackgroundBrush(QColor("#080b12"))
         self.video_item = QGraphicsVideoItem()
         self.scene().addItem(self.video_item)
@@ -31,6 +34,7 @@ class CaptionVideoView(QGraphicsView):
         self.caption_text = ""
         self.caption_enabled = True
         self._rotation = 0
+        self._frame_geometry=False
         self.video_item.nativeSizeChanged.connect(self.native_size_changed)
         self.videoSink().videoFrameChanged.connect(self.frame_changed)
         self.native_size_changed(QSizeF(640, 360))
@@ -44,19 +48,26 @@ class CaptionVideoView(QGraphicsView):
     def native_size_changed(self, size):
         if size.width() <= 0 or size.height() <= 0:
             return
+        if self._frame_geometry:return
         self._native_size=QSizeF(size)
         self.apply_display_size()
 
     def frame_changed(self, frame):
         if not frame.isValid():return
+        first_frame=not self._frame_geometry
+        self._frame_geometry=True
         # Qt renders these rotations itself; only the scene's fitting geometry
         # must use the same displayed orientation (never rotate the image twice).
         rotation=(frame.rotation().value+frame.surfaceFormat().rotation().value)%360
         size=QSizeF(frame.size())
-        if rotation!=self._rotation or size!=self._native_size:
+        if first_frame or rotation!=self._rotation or size!=self._native_size:
             self._rotation=rotation
             self._native_size=size
             self.apply_display_size()
+
+    def reset_frame_geometry(self,*_):
+        self._frame_geometry=False
+        self._rotation=0
 
     def apply_display_size(self):
         size=QSizeF(self._native_size)

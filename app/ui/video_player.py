@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt, QUrl, Signal, QTimer, QElapsedTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoFrame
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QSlider, QPushButton, QSizePolicy
 from app.ui.caption_video import CaptionVideoView
+from app.ui.seek_slider import SeekSlider
 from app.features.subtitles.editing import active_text
 from app.ui.components import panel, label
 from app.features.silence.sequence import sequence_source_ms, track_source_ms
@@ -61,7 +62,7 @@ class VideoPlayer(QWidget):
         self.stack.addWidget(self.empty)
         self.stack.addWidget(self.video)
         layout.addWidget(self.stack, 1)
-        self.seek = QSlider(Qt.Orientation.Horizontal)
+        self.seek = SeekSlider()
         self.seek.setAccessibleName("타임라인 재생 위치")
         self.seek.setRange(0, 0)
         layout.addWidget(self.seek)
@@ -87,6 +88,7 @@ class VideoPlayer(QWidget):
         controls.addWidget(self.volume)
         layout.addLayout(controls)
         self.player = QMediaPlayer(self)
+        self.player.sourceChanged.connect(self.video.reset_frame_geometry)
         self.audio_player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
         self.audio.setVolume(.7)

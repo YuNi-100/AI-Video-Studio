@@ -10,6 +10,7 @@ from app.features.subtitles.recheck import plan_ranges, apply_candidates, overla
 from app.features.subtitles.model import validate_segments, subtitle_time
 from app.features.subtitles.editing import review_reasons
 from app.ui.project_history import project_action
+from app.ui.apply_checkbox import ApplyCheckDelegate
 
 
 class SubtitleRecheck(QDialog):
@@ -55,14 +56,15 @@ class SubtitleRecheck(QDialog):
         self.settings = QLabel()
         layout.addWidget(self.settings)
         self.table = QTableWidget(0,5)
+        self.table.setItemDelegateForColumn(0,ApplyCheckDelegate(self.table))
         self.table.setHorizontalHeaderLabels(['적용','원본 구간','기존 자막','새 후보','후보 선택'])
         self.table.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3,QHeaderView.ResizeMode.Stretch)
-        self.table.setColumnWidth(0,44)
+        self.table.setColumnWidth(0,64)
         self.table.setColumnWidth(1,165)
         self.table.setColumnWidth(4,100)
         self.table.setEditTriggers(self.table.EditTrigger.NoEditTriggers)
-        self.table.cellDoubleClicked.connect(lambda row,col:self.listen(row))
+        self.table.cellDoubleClicked.connect(lambda row,col:self.listen(row) if col!=0 else None)
         layout.addWidget(self.table,1)
         details = QHBoxLayout()
         self.old_detail,self.new_detail = QPlainTextEdit(),QPlainTextEdit()
@@ -199,7 +201,7 @@ class SubtitleRecheck(QDialog):
         for i,(a,b) in enumerate(self.ranges):
             check = QTableWidgetItem()
             protected = self.protect.isChecked() and any(r.get('reviewed') and overlaps(r,a+self.offset,b+self.offset) for r in self.snapshot)
-            check.setFlags(Qt.ItemFlag.ItemIsEnabled if protected else Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsUserCheckable)
+            check.setFlags(Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsSelectable|(Qt.ItemFlag.NoItemFlags if protected else Qt.ItemFlag.ItemIsUserCheckable))
             check.setCheckState(Qt.CheckState.Unchecked)
             check.setToolTip('검수 완료 자막 보호 중' if protected else '이 구간의 기존 자막을 선택 후보로 바꿉니다.')
             self.table.setItem(i,0,check)

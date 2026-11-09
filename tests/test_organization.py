@@ -181,7 +181,7 @@ class VideoOutputTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         seq=dict(id='out',name='시험 출력',source=A,duration=7.188,ranges=[],clips=[dict(track=t,source=p,source_duration=d,start=0,end=length,at=at,group=str(i)) for i,(p,d,length,at) in enumerate([(A,7.188,.5,0),(B,3,1,1)]) for t in ('video','audio')])
         self.d=VideoExportDialog(seq,[dict(start=.1,end=.4,text='한글 자막')])
-    def tearDown(self):self.d.reject();self.temp.cleanup()
+    def tearDown(self):self.d.reject();self.d.deleteLater();QTest.qWait(30);self.temp.cleanup()
     def wait(self):
         end=time.monotonic()+30
         while self.d.process and time.monotonic()<end:QTest.qWait(20)

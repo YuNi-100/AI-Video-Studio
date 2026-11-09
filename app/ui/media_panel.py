@@ -1,6 +1,6 @@
 from pathlib import Path
 from PySide6.QtCore import Signal, QSignalBlocker, Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFileDialog, QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QInputDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFileDialog, QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QInputDialog,QSizePolicy
 from PySide6.QtGui import QShortcut, QKeySequence
 from app.ui.components import panel, label
 from app.ui.primary_button import PrimaryButton
@@ -35,13 +35,18 @@ class MediaPanel(QWidget):
         title_bar.addWidget(self.count_label)
         layout.addLayout(title_bar)
         library_bar = QHBoxLayout()
-        library_bar.addWidget(label("MEDIA LIBRARY", "muted"))
+        library_title=label('MEDIA LIBRARY','muted')
+        library_title.setWordWrap(False)
+        library_title.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        library_bar.addWidget(library_title)
         library_bar.addStretch()
         self.new_folder=QPushButton("새 폴더")
-        self.new_folder.setFixedHeight(28)
+        self.new_folder.setStyleSheet('padding: 4px 8px;')
+        self.new_folder.setMinimumHeight(30)
+        self.new_folder.setMinimumWidth(72)
         library_bar.addWidget(self.new_folder)
         self.rename_button = QPushButton("이름 변경")
-        self.rename_button.setFixedHeight(28)
+        self.rename_button.setMinimumHeight(30)
         self.rename_button.setStyleSheet("padding: 4px 8px;")
         self.rename_button.setEnabled(False)
         self.rename_button.setToolTip("앱 표시 이름만 변경 · 원본 파일명과 위치 유지 · F2")

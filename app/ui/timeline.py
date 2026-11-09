@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSignalBlocker, QPoint, QTimer
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSignalBlocker, QPoint, QTimer,QEvent
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF, QBrush
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSlider, QScrollBar, QCheckBox, QComboBox, QPushButton, QTabBar, QToolButton, QListWidget, QSizePolicy, QFrame
 from app.ui.components import panel, label
@@ -26,6 +26,7 @@ class TrackCanvas(QWidget):
     subtitle_resized = Signal(int, int, int)
     scrub_started = Signal()
     scrub_finished = Signal()
+    zoom_requested = Signal(int,float)
 
     def __init__(self):
         super().__init__()
@@ -62,12 +63,21 @@ class TrackCanvas(QWidget):
         self.navigation = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setMinimumHeight(230)
+        self.setMinimumHeight(175)
         self.setAccessibleName("영상과 자막 타임라인 · 클릭하여 재생 위치 이동")
 
     @property
     def span(self):
         return max(1000, round(max(10000, self.duration) * 100 / self.zoom))
+
+    def wheelEvent(self,event):
+        if event.modifiers()==Qt.KeyboardModifier.AltModifier and not self.drag and not self.navigation:
+            delta=event.angleDelta().y() or event.pixelDelta().y()
+            if delta:
+                fraction=max(0.,min(1.,(event.position().x()-95)/max(1,self.width()-107)))
+                self.zoom_requested.emit(delta,fraction)
+                event.accept();return
+        super().wheelEvent(event)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -516,9 +526,11 @@ class Timeline(QWidget):
         self.zoom.setValue(100)
         self.zoom.setFixedWidth(120)
         self.zoom.setAccessibleName("타임라인 확대")
+        self.zoom.setToolTip('타임라인 위에서 Alt+휠 · 마우스 위치를 기준으로 확대/축소')
         editbar.addWidget(self.zoom)
         self.follow_playhead = True
         self.canvas = TrackCanvas()
+        self.canvas.zoom_requested.connect(self.zoom_at_pointer)
         self.canvas.seek_requested.connect(lambda _:setattr(self,"follow_playhead",True))
         self.canvas.clip_seek_requested.connect(lambda _:setattr(self,"follow_playhead",True))
         content=QHBoxLayout()
@@ -539,6 +551,8 @@ class Timeline(QWidget):
         self.sequence_list.hide()
         self.sequence_tree=ProjectTree()
         self.sequence_tree.setFixedWidth(260)
+        self.sequence_tree.setMinimumHeight(40)
+        self.sequence_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         sidebar.addWidget(self.sequence_tree,1)
         content.addLayout(sidebar)
         self.editing_panel=QWidget()
@@ -564,6 +578,17 @@ class Timeline(QWidget):
         self.hint = label("시간 눈금 드래그 → 재생 위치 · 빈 곳 클릭 → 위치 이동 · 자막 양 끝 → 시간 조정", "muted")
         layout.addWidget(self.hint)
         self.update_scroll()
+
+        for widget in [self.editing_panel]+self.editing_panel.findChildren(QWidget):widget.installEventFilter(self)
+
+    def eventFilter(self,watched,event):
+        if event.type()==QEvent.Type.Wheel and event.modifiers()==Qt.KeyboardModifier.AltModifier and not self.canvas.drag and not self.canvas.navigation:
+            delta=event.angleDelta().y() or event.pixelDelta().y()
+            if delta:
+                x=watched.mapTo(self.canvas,event.position().toPoint()).x()
+                self.zoom_at_pointer(delta,max(0.,min(1.,(x-95)/max(1,self.canvas.width()-107))))
+                event.accept();return True
+        return super().eventFilter(watched,event)
 
     def update_keyboard_border(self):
         if not hasattr(self,'keyboard_border'):return
@@ -628,3 +653,15 @@ class Timeline(QWidget):
         self.canvas.zoom = value
         self.update_scroll()
         self.canvas.update()
+
+    def zoom_at_pointer(self,delta,fraction):
+        canvas=self.canvas
+        anchor=canvas.offset+fraction*canvas.span
+        value=max(self.zoom.minimum(),min(self.zoom.maximum(),round(self.zoom.value()*2**(max(-480,min(480,delta))/480))))
+        if value==self.zoom.value():return
+        with QSignalBlocker(self.zoom):self.zoom.setValue(value)
+        canvas.zoom=value
+        canvas.offset=round(anchor-fraction*canvas.span)
+        self.follow_playhead=False
+        canvas.offset=max(0,min(canvas.offset,max(0,canvas.duration-canvas.span)))
+        self.update_scroll();canvas.update()

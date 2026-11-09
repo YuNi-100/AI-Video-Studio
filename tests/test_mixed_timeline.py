@@ -132,9 +132,9 @@ class MixedUITests(unittest.TestCase):
         self.assertEqual(len(self.w.active_sequence()['timeline_captions']),2)
         self.w.undo_subtitle();self.assertEqual(len(self.w.active_sequence()['timeline_captions']),3)
     def test_selection_starts_below_tracks_and_ctrl_box_adds(self):
-        self.assertGreaterEqual(self.w.timeline.canvas.height(),230)
+        self.assertGreaterEqual(self.w.timeline.canvas.height(),175)
         self.click(500,47)
-        self.gesture((self.x(2800),220),(self.x(2200),34),Qt.KeyboardModifier.ControlModifier)
+        self.gesture((self.x(2800),self.w.timeline.canvas.height()-10),(self.x(2200),34),Qt.KeyboardModifier.ControlModifier)
         self.assertEqual(self.w.timeline.canvas.selected_keys,{0,1,4,5})
     def test_mouse_overwrite_then_recover_source_by_extending_left_edge(self):
         w=self.w;s=w.active_sequence();clips=sequence_clips(s)

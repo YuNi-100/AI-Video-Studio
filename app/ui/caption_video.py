@@ -30,7 +30,9 @@ class CaptionVideoView(QGraphicsView):
         self.scene().addItem(self.caption)
         self.caption_text = ""
         self.caption_enabled = True
+        self._rotation = 0
         self.video_item.nativeSizeChanged.connect(self.native_size_changed)
+        self.videoSink().videoFrameChanged.connect(self.frame_changed)
         self.native_size_changed(QSizeF(640, 360))
 
     def videoSink(self):
@@ -42,6 +44,23 @@ class CaptionVideoView(QGraphicsView):
     def native_size_changed(self, size):
         if size.width() <= 0 or size.height() <= 0:
             return
+        self._native_size=QSizeF(size)
+        self.apply_display_size()
+
+    def frame_changed(self, frame):
+        if not frame.isValid():return
+        # Qt renders these rotations itself; only the scene's fitting geometry
+        # must use the same displayed orientation (never rotate the image twice).
+        rotation=(frame.rotation().value+frame.surfaceFormat().rotation().value)%360
+        size=QSizeF(frame.size())
+        if rotation!=self._rotation or size!=self._native_size:
+            self._rotation=rotation
+            self._native_size=size
+            self.apply_display_size()
+
+    def apply_display_size(self):
+        size=QSizeF(self._native_size)
+        if self._rotation in (90,270):size.transpose()
         self.video_item.setSize(size)
         self.scene().setSceneRect(0, 0, size.width(), size.height())
         font = QFont("Malgun Gothic")
@@ -70,4 +89,8 @@ class CaptionVideoView(QGraphicsView):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def showEvent(self,event):
+        super().showEvent(event)
         self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)

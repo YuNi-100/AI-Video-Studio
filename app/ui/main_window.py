@@ -201,6 +201,7 @@ class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflo
         vertical.addWidget(horizontal)
         self.timeline = Timeline()
         self.timeline.canvas.copy_requested.connect(self.copy_timeline_sets)
+        self.timeline.canvas.cut_requested.connect(self.cut_timeline_sets)
         self.timeline.canvas.paste_requested.connect(self.paste_timeline_sets)
         self.timeline.sequence_tabs.currentChanged.connect(self.select_edit_sequence)
         self.timeline.sequence_tabs.tabBarClicked.connect(lambda i:self.focus_active_sequence_in_list()

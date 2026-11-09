@@ -9,7 +9,7 @@ class EditGroups:
         if not visible_edit(parent):return
         self.freeze_work_captions(parent)
         previous={s['source']:s for s in self.project.edit_sequences if s.get('parent_id')==parent['id']}
-        children=[file_view(parent,path,previous.get(path)) for path in parts(parent)]
+        children=[file_view(parent,path,previous.get(path)) for path in dict.fromkeys(parts(parent)+list(previous))]
         self.project.edit_sequences[:]=[s for s in self.project.edit_sequences if s.get('parent_id')!=parent['id']]+children
 
     def sync_all_group_children(self):
@@ -21,6 +21,13 @@ class EditGroups:
             parent=next((s for s in self.project.edit_sequences if s['id']==old['parent_id']),None)
             if parent is None:raise ValueError('상위 편집본이 없습니다.')
             candidate=merge_file_view(parent,old,new)
+            base=old.get('view_base',0)
+            end=max((c['at']+c['end']-c['start'] for c in sequence_clips(old)),default=0)
+            extent=max((c['at']+c['end']-c['start'] for c in sequence_clips(new)),default=0)
+            delta=round(extent-end,3)
+            for view in self.project.edit_sequences:
+                if view.get('parent_id')==parent['id'] and view['id']!=old['id'] and view.get('view_base',0)>=base+end-.000001:
+                    view['view_base']=round(view['view_base']+delta,3)
             index=self.project.edit_sequences.index(parent);self.project.edit_sequences[index]=candidate
             self.sync_group_children(candidate)
         elif visible_edit(new):self.sync_group_children(new)

@@ -4,16 +4,17 @@ from bisect import bisect_left
 from app.features.silence.sequence import sequence_clips, sequence_layout, validate_sequence
 
 
-def copy_sets(seq, indices, caption_indices=(), subtitles=None, offsets=None):
+def copy_sets(seq, indices, caption_indices=(), subtitles=None, offsets=None, whole_sets=True):
     clips = sequence_clips(seq)
     cues = sequence_layout(seq, subtitles or {}, offsets or {})[1]
     groups = {clips[i]['group'] for i in indices if 0 <= i < len(clips)}
-    groups |= {cues[i]['owner'] for i in caption_indices if 0 <= i < len(cues) and cues[i].get('owner')}
+    if whole_sets:groups |= {cues[i]['owner'] for i in caption_indices if 0 <= i < len(cues) and cues[i].get('owner')}
     groups &= {c['group'] for c in clips}
-    chosen = [dict(c, source=c.get('source', seq['source']), source_duration=c.get('source_duration',seq['duration'])) for c in clips if c['group'] in groups]
-    rows = [dict(r) for i,r in enumerate(cues) if r.get('owner') in groups or i in caption_indices]
+    chosen = [dict(c, source=c.get('source', seq['source']), source_duration=c.get('source_duration',seq['duration'])) for i,c in enumerate(clips) if (c['group'] in groups if whole_sets else i in indices)]
+    rows = [dict(r) for i,r in enumerate(cues) if (whole_sets and r.get('owner') in groups) or i in caption_indices]
+    video_groups={c['group'] for c in chosen if c['track']=='video'}
     for row in rows:
-        if row.get('owner') not in groups:
+        if row.get('owner') not in video_groups:
             row.pop('owner',None)
             row['detached'] = True
     # Preserve intentional audio/video offsets within each selected set.

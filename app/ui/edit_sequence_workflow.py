@@ -249,6 +249,10 @@ class EditSequenceWorkflow:
             return None
         try:
             candidate=self.timeline_edit_candidate(index,mode,delta,ripple,track)
+            if seq.get("parent_id"):
+                from app.features.edit_groups import merge_file_view
+                parent=next(s for s in self.project.edit_sequences if s["id"]==seq["parent_id"])
+                merge_file_view(parent,seq,candidate)
             canvas=self.timeline.canvas
             groups={sequence_clips(seq)[i]['group'] for i in canvas.selected_keys}
             canvas.drag_destinations=[b for b in sequence_layout(candidate)[0] if sequence_clips(candidate)[b[4]]['group'] in groups]
@@ -319,6 +323,8 @@ class EditSequenceWorkflow:
             return
         try:
             candidate=self.timeline_edit_candidate(index,mode,delta,ripple,track)
+            if delta and sequence_clips(candidate)==sequence_clips(seq) and candidate.get('timeline_captions')==seq.get('timeline_captions'):
+                self.statusBar().showMessage('이동 범위 끝입니다. 0초 또는 앞뒤 컷과 겹치지 않는 범위에서 이동하세요.');return
             self.commit_sequence(candidate,'끝 맞춤 · 컷 길이 보존' if self.timeline.canvas.snap_insert else '뒤 컷 함께 조정' if ripple else '컷 조정')
         except ValueError as exc:
             self.statusBar().showMessage(str(exc))

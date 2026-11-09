@@ -47,8 +47,16 @@ class TimelineFocus(QObject):
         if event.type()==QEvent.Type.WindowDeactivate and watched is window:
             self.set_active(False)
         if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton:
-            self.set_active(watched.window() is window and not self.text_input(watched)
-                and self.editing_widget(watched,event.globalPosition().toPoint()))
+            point=event.globalPosition().toPoint()
+            target=watched
+            if watched is window.timeline.editing_panel or watched.isAncestorOf(window.timeline.editing_panel):
+                target=window.childAt(window.mapFromGlobal(point)) or watched
+            self.set_active(watched.window() is window and not self.text_input(target)
+                and self.editing_widget(target,point))
+            if self.active:
+                focus=QApplication.focusWidget()
+                if focus is None or self.text_input(focus) or not self.editing_widget(focus):
+                    window.timeline.canvas.setFocus(Qt.FocusReason.MouseFocusReason)
         elif event.type()==QEvent.Type.FocusIn:
             self.set_active(watched.window() is window and not self.text_input(watched) and self.editing_widget(watched))
         if event.type() not in (QEvent.Type.ShortcutOverride,QEvent.Type.KeyPress):return False
@@ -56,7 +64,7 @@ class TimelineFocus(QObject):
         if not window.timeline.isEnabled() or window.subtitle_job.busy or self.text_input(QApplication.focusWidget()):return False
         key=event.key();mod=event.modifiers()
         command=(key in (Qt.Key.Key_Delete,Qt.Key.Key_Backspace) and mod in (Qt.KeyboardModifier.NoModifier,Qt.KeyboardModifier.AltModifier)) or (
-            key in (Qt.Key.Key_K,Qt.Key.Key_C,Qt.Key.Key_V) and mod==Qt.KeyboardModifier.ControlModifier)
+            key in (Qt.Key.Key_K,Qt.Key.Key_C,Qt.Key.Key_X,Qt.Key.Key_V) and mod==Qt.KeyboardModifier.ControlModifier)
         if not command:return False
         event.accept()
         if event.type()==QEvent.Type.ShortcutOverride or event.isAutoRepeat():return True

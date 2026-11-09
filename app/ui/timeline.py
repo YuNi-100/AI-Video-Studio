@@ -14,6 +14,7 @@ class TrackCanvas(QWidget):
     clip_edited = Signal(str,int,str,int,bool)
     split_requested = Signal()
     copy_requested = Signal()
+    cut_requested = Signal()
     paste_requested = Signal()
     delete_requested = Signal()
     ripple_delete_requested = Signal()
@@ -224,9 +225,9 @@ class TrackCanvas(QWidget):
         return None
 
     def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton or not self.duration or event.position().x() < 95:
-            return
+        if event.button() != Qt.MouseButton.LeftButton:return
         self.setFocus()
+        if not self.duration or event.position().x() < 95:return
         value = self.value_at(event.position().x())
         self.selected_gap=None
         self.snap_guide=None;self.snap_insert=False;self.edit_blocked=False
@@ -412,8 +413,8 @@ class TrackCanvas(QWidget):
         if not self.keyboard_active and event.key()!=Qt.Key.Key_Escape:
             super().keyPressEvent(event)
             return
-        if not self.drag and not self.navigation and event.modifiers()==Qt.KeyboardModifier.ControlModifier and event.key() in (Qt.Key.Key_C,Qt.Key.Key_V):
-            (self.copy_requested if event.key()==Qt.Key.Key_C else self.paste_requested).emit()
+        if not self.drag and not self.navigation and event.modifiers()==Qt.KeyboardModifier.ControlModifier and event.key() in (Qt.Key.Key_C,Qt.Key.Key_X,Qt.Key.Key_V):
+            (self.copy_requested if event.key()==Qt.Key.Key_C else self.cut_requested if event.key()==Qt.Key.Key_X else self.paste_requested).emit()
             event.accept()
             return
         if event.key()==Qt.Key.Key_Escape and self.selection_origin is not None:

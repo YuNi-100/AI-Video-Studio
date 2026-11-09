@@ -2,7 +2,9 @@ from pathlib import Path
 from uuid import uuid4
 from copy import deepcopy
 from app.features.clip_clipboard import copy_sets
-from app.features.silence.sequence import sequence_sources, splice_sequence
+from app.features.timeline_actions import delete_items
+from app.ui.project_history import project_action
+from app.features.silence.sequence import sequence_sources, splice_sequence, sequence_clips, validate_sequence
 
 
 class ClipClipboardWorkflow:
@@ -44,6 +46,30 @@ class ClipClipboardWorkflow:
         except ValueError as exc:
             self.statusBar().showMessage(str(exc))
 
+    @project_action
+    def cut_timeline_sets(self):
+        if self.subtitle_job.busy or not self.resolve_subtitle_edit():return
+        seq=self.active_sequence();c=self.timeline.canvas
+        if not seq or c.drag or c.navigation:return
+        try:
+            # Build both snapshots first; a rejected parent edit must not destroy the clipboard.
+            payload=copy_sets(seq,c.selected_keys,c.selected_subtitles,self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()},whole_sets=seq.get('linked',True) and not c.individual_selection)
+            if any(not Path(path).is_file() for path in sequence_sources(payload)):raise ValueError('잘라낼 컷의 원본 파일을 찾을 수 없습니다. 먼저 파일을 다시 연결하세요.')
+            from app.features.silence.sequence import sequence_clips
+            identities={(r['group'],r['track']) for r in sequence_clips(payload)}
+            indices={i for i,r in enumerate(sequence_clips(seq)) if (r['group'],r['track']) in identities}
+            rows=deepcopy(self.timeline.canvas.segments)
+            if c.individual_selection:
+                groups={sequence_clips(seq)[i]['group'] for i in indices if sequence_clips(seq)[i]['track']=='video'}
+                for i,row in enumerate(rows):
+                    if row.get('owner') in groups and i not in c.selected_subtitles:row.pop('owner');row['detached']=True
+            candidate=delete_items(dict(seq,linked=seq.get('linked',True) and not c.individual_selection,timeline_captions=rows),indices,c.selected_subtitles,False)
+            candidate['linked']=seq.get('linked',True)
+            self.commit_sequence(candidate,'컷 잘라내기 · 빈자리 유지 · Ctrl+V로 삽입')
+            self.clip_clipboard=payload
+        except (ValueError,OSError) as exc:self.statusBar().showMessage(str(exc))
+
+    @project_action
     def paste_timeline_sets(self):
         payload = getattr(self,'clip_clipboard',None)
         if not payload or self.subtitle_job.busy or not self.resolve_subtitle_edit():
@@ -55,10 +81,23 @@ class ClipClipboardWorkflow:
             paths = sequence_sources(payload)
             if any(not Path(p).is_file() for p in paths):
                 raise ValueError('복사한 컷의 원본 파일을 찾을 수 없습니다.')
-            candidate = splice_sequence(self.active_sequence(),[payload],self.transport_position_value(),
-                self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})
+            target=self.active_sequence();position=self.transport_position_value()
+            if sequence_clips(payload) and target.get("parent_id") and not paths<={target["source"]}:
+                position+=round(target.get("view_base",0)*1000)
+                target=next(s for s in self.project.edit_sequences if s["id"]==target["parent_id"])
+            if sequence_clips(payload):
+                candidate = splice_sequence(target,[payload],position,
+                    self.project.subtitles,{p:self.placement(p)['video'] for p in self.media.paths()})
+            else:
+                rows=deepcopy(target.get('timeline_captions',[]))
+                for row in payload.get('timeline_captions',[]):
+                    item=dict(row,id=uuid4().hex,start=round(row['start']+position/1000,3),end=round(row['end']+position/1000,3),detached=True)
+                    item.pop('owner',None);rows.append(item)
+                candidate=validate_sequence(dict(target,timeline_captions=sorted(rows,key=lambda r:r['start'])))
             if not paths <= set(self.media.paths()):
                 self.register_drop_media(self.source_items(sorted(paths)))
+            if self.active_edit_id!=target['id']:
+                self.open_edit_sequence(target['id']);self.seek_transport(position)
             self.commit_sequence(candidate,'컷 붙여넣기 · 뒤 컷 함께 이동')
         except (ValueError,OSError) as exc:
             self.statusBar().showMessage(str(exc))

@@ -29,6 +29,10 @@ def validate_sequence(value):
         if not isinstance(text,str) or not text.strip() or len(text)>limit or any(ord(c)<32 for c in text):
             raise ValueError('시퀀스 이름 또는 원본 정보가 올바르지 않습니다.')
         result[key]=text
+    if 'view_base' in value:
+        base=value['view_base']
+        if not _number(base) or not 0<=base<=604800:raise ValueError('수정본 시작 기준이 올바르지 않습니다.')
+        result['view_base']=float(base)
     if 'parent_id' in value:
         parent=value['parent_id']
         if not isinstance(parent,str) or not 0<len(parent)<=64 or parent==result['id']:raise ValueError('상위 편집본 정보가 올바르지 않습니다.')

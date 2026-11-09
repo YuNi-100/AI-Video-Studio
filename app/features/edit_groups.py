@@ -21,8 +21,9 @@ def parts(seq):
 
 def file_view(parent,source,previous=None):
     clips=[c for c in sequence_clips(parent) if c.get('source',parent['source'])==source]
-    if not clips:return None
-    base=min(c['at'] for c in clips);groups={c['group'] for c in clips}
+    if not clips:
+        return validate_sequence(dict(previous,clips=[],ranges=[],timeline_captions=[])) if previous else None
+    base=min((previous or {}).get('view_base',min(c['at'] for c in clips)),min(c['at'] for c in clips));groups={c['group'] for c in clips}
     old_ids={r.get('id') for r in (previous or {}).get('timeline_captions',[]) if r.get('id')}
     videos=[c for c in sequence_clips(parent) if c['track']=='video']
     rows=[]
@@ -33,7 +34,7 @@ def file_view(parent,source,previous=None):
     value=dict(id=(previous or {}).get('id','part-'+uuid5(NAMESPACE_URL,parent['id']+':'+source).hex),
         name=next((c['label'] for c in clips if c.get('label')),Path(source).name)[:120],source=source,
         duration=next((c['source_duration'] for c in clips if 'source_duration' in c),parent['duration']),
-        parent_id=parent['id'],ranges=[],clips=[dict(c,at=round(c['at']-base,3)) for c in clips],
+        parent_id=parent['id'],view_base=base,ranges=[],clips=[dict(c,at=round(c['at']-base,3)) for c in clips],
         timeline_captions=rows,linked=parent.get('linked',True))
     if previous:
         for field in ('subtitle_run','scene_tags'):
@@ -44,8 +45,8 @@ def file_view(parent,source,previous=None):
 def merge_file_view(parent,old,new):
     source=old['source'];clips=sequence_clips(parent)
     chosen=[c for c in clips if c.get('source',parent['source'])==source]
-    if not chosen:raise ValueError('상위 편집본에서 이 영상이 제거되었습니다.')
-    base=min(c['at'] for c in chosen);end=max(c['at']+c['end']-c['start'] for c in chosen)
+    base=old.get('view_base',min((c['at'] for c in chosen),default=0))
+    end=max((c['at']+c['end']-c['start'] for c in chosen),default=base)
     incoming=sequence_clips(new)
     extent=max((c['at']+c['end']-c['start'] for c in incoming),default=0)
     delta=round(extent-(end-base),3)

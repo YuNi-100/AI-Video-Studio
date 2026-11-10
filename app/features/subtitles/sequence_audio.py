@@ -6,8 +6,8 @@ from app.features.silence.sequence import sequence_clips,sequence_layout
 RATE=16000
 
 
-def render_audio(sequence,destination):
-    extent=round(sequence_layout(sequence)[2]/1000*RATE)
+def render_audio(sequence,destination,*,extent_seconds=None):
+    extent=round((sequence_layout(sequence)[2]/1000 if extent_seconds is None else extent_seconds)*RATE)
     if extent<=0:raise ValueError('음성을 분석할 편집 구간이 없습니다.')
     cursor=0
     with wave.open(str(destination),'wb') as output:

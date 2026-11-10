@@ -35,12 +35,23 @@ from app.ui.edit_sequence_workflow import EditSequenceWorkflow
 from app.ui.clip_clipboard import ClipClipboardWorkflow
 
 class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflow, OrganizerWorkflow, SequenceDropWorkflow, ProjectWorkspace, EditSequenceWorkflow, TimelineWorkflow, QMainWindow):
+    def open_subtitle_audit(self):
+        if self.subtitle_job.busy or not self.resolve_subtitle_edit():return
+        if not self.active_sequence():
+            self.statusBar().showMessage('아래 편집본 목록에서 점검할 작업본을 먼저 선택하세요.');return
+        from app.ui.subtitle_audit import SubtitleAudit
+        if not hasattr(self,'audit_dialog'):self.audit_dialog=SubtitleAudit(self)
+        d=self.audit_dialog
+        if d.isVisible():d.raise_();return
+        if d.process:return
+        d.prepare();d.show();d.raise_()
+
     def open_subtitle_recheck(self):
         selected_caption = self.subtitle_panel.editor.selected_index
         if self.subtitle_job.busy or not self.resolve_subtitle_edit():
             return
         if not self.active_sequence() or not self.preview.ready:
-            self.statusBar().showMessage("아래 편집본 목록에서 재검토할 작업본을 먼저 선택하세요.")
+            self.statusBar().showMessage("아래 편집본 목록에서 다시 인식할 작업본을 먼저 선택하세요.")
             return
         if hasattr(self,"recheck_dialog") and self.recheck_dialog.isVisible():
             self.recheck_dialog.raise_()
@@ -149,7 +160,7 @@ class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflo
         search_button.clicked.connect(self.open_scene_search)
         tabs.addWidget(search_button)
         recheck_button = QPushButton("자막 재검토")
-        recheck_button.clicked.connect(self.open_subtitle_recheck)
+        recheck_button.clicked.connect(self.open_subtitle_audit)
         tabs.addWidget(recheck_button)
         tabs.addStretch()
         roadmap = QPushButton("개발 계획")

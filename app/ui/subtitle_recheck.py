@@ -24,7 +24,7 @@ class SubtitleRecheck(QDialog):
         self.listen_timer = QTimer(self)
         self.listen_timer.setInterval(50)
         self.listen_timer.timeout.connect(self.stop_at_end)
-        self.setWindowTitle('자막 재검토 · 기존 자막과 비교')
+        self.setWindowTitle('구간 재인식 · 기존 자막과 후보 비교')
         self.resize(1040,620)
         layout = QVBoxLayout(self)
         self.source_label = QLabel()
@@ -45,7 +45,7 @@ class SubtitleRecheck(QDialog):
         selected = QPushButton('선택 자막 구간')
         selected.clicked.connect(self.use_selection)
         bar.addWidget(selected)
-        self.generate = QPushButton('재검토 시작')
+        self.generate = QPushButton('재인식 시작')
         self.generate.clicked.connect(self.begin)
         bar.addWidget(self.generate)
         self.cancel = QPushButton('인식 취소')
@@ -57,7 +57,7 @@ class SubtitleRecheck(QDialog):
         layout.addWidget(self.settings)
         self.table = QTableWidget(0,5)
         self.table.setItemDelegateForColumn(0,ApplyCheckDelegate(self.table))
-        self.table.setHorizontalHeaderLabels(['적용','원본 구간','기존 자막','새 후보','후보 선택'])
+        self.table.setHorizontalHeaderLabels(['적용','작업본 구간','기존 자막','새 후보','후보 선택'])
         self.table.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3,QHeaderView.ResizeMode.Stretch)
         self.table.setColumnWidth(0,64)
@@ -112,7 +112,7 @@ class SubtitleRecheck(QDialog):
         self.language = w.subtitle_panel.language.currentData()
         self.terms = w.subtitle_panel.terms.text()
         self.vad = w.subtitle_panel.skip_silence.isChecked()
-        self.source_label.setText('재검토 대상: '+(seq['name'] if seq else w.media.display_name(self.source)))
+        self.source_label.setText('재인식 대상: '+(seq['name'] if seq else w.media.display_name(self.source)))
         self.settings.setText(f'{self.model} · {self.language} · 기본 설정 / 용어 힌트 제외 후보 비교 · 적용 후 Ctrl+Z로 되돌리기')
         self.end.setValue(self.duration)
         self.start.setValue(0)
@@ -171,7 +171,7 @@ class SubtitleRecheck(QDialog):
             w.subtitle_panel.set_busy(True)
             w.media.setEnabled(False)
             w.timeline.setEnabled(False)
-            self.status.setText('재검토 중 · 기본 후보와 힌트 제외 후보를 만듭니다. 기존 자막은 유지됩니다.')
+            self.status.setText('재인식 중 · 기본 후보와 힌트 제외 후보를 만듭니다. 기존 자막은 유지됩니다.')
             module='app.features.subtitles.recheck_worker';extra=['--request',str(self.request_path)]
             if self.sequence_id:
                 self.work=tempfile.TemporaryDirectory(prefix='studio-work-recheck-')
@@ -190,7 +190,7 @@ class SubtitleRecheck(QDialog):
             alternate = validate_segments(self.studio.subtitle_job.run_info.get('alternate',[]))
             self.candidates = [deepcopy(rows),alternate]
             self.render()
-            self.status.setText('재검토 완료 · 영상으로 확인하고 적용할 구간만 체크하세요. 빈 후보는 적용하지 않습니다.')
+            self.status.setText('재인식 완료 · 영상으로 확인하고 적용할 구간만 체크하세요. 빈 후보는 적용하지 않습니다.')
         except ValueError as exc:
             self.status.setText(str(exc))
 
@@ -246,7 +246,7 @@ class SubtitleRecheck(QDialog):
         if self.running or self.candidates is None or not 0 <= row < len(self.ranges):
             return
         if not self.unchanged() or w.subtitle_job.busy or not w.resolve_subtitle_edit():
-            self.status.setText('원본 자막이 바뀌었습니다. 다시 열어 재검토하세요.')
+            self.status.setText('원본 자막이 바뀌었습니다. 다시 열어 재인식하세요.')
             return
         if not self.sequence_id and w.active_sequence():
             w.timeline.sequence_tabs.setCurrentIndex(0)
@@ -269,7 +269,7 @@ class SubtitleRecheck(QDialog):
         if self.running or self.candidates is None or w.subtitle_job.busy or not w.resolve_subtitle_edit():
             return
         if not self.unchanged():
-            self.status.setText('기존 자막이나 프로젝트가 바뀌어 적용을 중단했습니다. 다시 재검토하세요.')
+            self.status.setText('기존 자막이나 프로젝트가 바뀌어 적용을 중단했습니다. 다시 재인식하세요.')
             return
         replacements = []
         for i,(a,b) in enumerate(self.ranges):
@@ -285,7 +285,7 @@ class SubtitleRecheck(QDialog):
         try:
             rows = apply_candidates(self.snapshot,replacements,self.offset,self.protect.isChecked())
             if self.sequence_id:
-                w.commit_work_subtitles(rows,sequence_id=self.sequence_id,message="작업본 자막 재검토 적용")
+                w.commit_work_subtitles(rows,sequence_id=self.sequence_id,message="작업본 자막 재인식 적용")
             else:
                 w.remember_subtitles(self.source)
                 w.project.subtitles[self.source] = rows

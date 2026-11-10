@@ -100,10 +100,12 @@ class CompactTimelineTests(unittest.TestCase):
         t=Timeline();t.resize(1300,360);t.show();QTest.qWait(20)
         try:
             c=t.canvas;c.duration=120000;t.zoom.setValue(200);c.offset=20000;t.update_scroll()
-            x=95+.4*(c.width()-107);before=c.offset+.4*c.span
+            x=95+.4*(c.width()-107)
+            fraction=(QPointF(x,0).toPoint().x()-95)/(c.width()-107)
+            before=c.offset+fraction*c.span
             self.wheel(c,x)
             self.assertGreater(t.zoom.value(),200);self.assertEqual(t.zoom.value(),c.zoom)
-            self.assertAlmostEqual(c.offset+.4*c.span,before,delta=2)
+            self.assertAlmostEqual(c.offset+fraction*c.span,before,delta=2)
             larger=t.zoom.value();self.wheel(c,x,-120);self.assertLess(t.zoom.value(),larger)
             value=t.zoom.value();self.wheel(c,x,120,Qt.KeyboardModifier.NoModifier);self.assertEqual(t.zoom.value(),value)
             self.wheel(t.zoom,t.zoom.width()/2);self.assertGreater(t.zoom.value(),value)
@@ -118,13 +120,18 @@ class CompactTimelineTests(unittest.TestCase):
         try:
             for i in range(70):w.timeline.sequence_tree.addTopLevelItem(QTreeWidgetItem([f'자료 {i}','자료']))
             split=w.workspace_vertical;handle=split.handle(1);point=handle.rect().center()
+            low,high=split.getRange(1)
+            split.moveSplitter((low+high)//2,1);QTest.qWait(30)
             before=split.sizes()
             QTest.mousePress(handle,Qt.MouseButton.LeftButton,pos=point)
             QTest.mouseMove(handle,point+QPoint(0,500),delay=30)
             QTest.mouseRelease(handle,Qt.MouseButton.LeftButton);QTest.qWait(30)
             self.assertGreater(split.sizes()[0],before[0],(w.size(),w.pos(),split.geometry(),split.getRange(1),w.screen().availableGeometry()))
             c=w.timeline.canvas
-            self.assertGreaterEqual(c.height(),175);self.assertLess(c.height(),230)
+            self.assertGreaterEqual(c.height(),189);self.assertLess(c.height(),230)
+            hint=w.timeline.hint
+            self.assertTrue(hint.parentWidget().contentsRect().contains(hint.geometry()))
+            self.assertGreaterEqual(hint.height(),hint.heightForWidth(hint.width()))
             tree=w.timeline.sequence_tree
             self.assertGreater(tree.verticalScrollBar().maximum(),0)
             tree.scrollToBottom();QTest.qWait(10)

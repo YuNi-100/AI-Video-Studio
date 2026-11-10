@@ -281,7 +281,6 @@ class TimelineWorkflow:
         canvas.update()
 
     def request_timeline_seek(self, position):
-        self.select_playhead_video(position)
         if self._scrubbing:
             self._scrub_target = position
             self.timeline.set_position(position)

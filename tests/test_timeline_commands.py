@@ -42,6 +42,7 @@ class TimelineCommandTests(unittest.TestCase):
 
     def test_cut_paste_undo_redo_in_child_preserves_lengths_and_captions(self):
         w=self.w;c=self.child();w.request_timeline_seek(1500)
+        w.select_sequence_clip('video',2)
         before=deepcopy(w.active_sequence());QTest.keyClick(c,Qt.Key.Key_X,CTRL)
         self.assertEqual([r['at'] for r in sequence_clips(w.active_sequence())],[0,0,3,3])
         self.assertEqual([r['text'] for r in c.segments],['A','C'])

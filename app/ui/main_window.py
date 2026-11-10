@@ -266,7 +266,7 @@ class MainWindow(EditGroups, WorkSubtitles, ProjectHistory, ClipClipboardWorkflo
         self.timeline.scope.currentIndexChanged.connect(self.scope_changed)
         vertical.addWidget(self.timeline)
         vertical.setChildrenCollapsible(False)
-        vertical.setSizes([415, 415])
+        vertical.setSizes([495, 335])
         layout.addWidget(vertical, 1)
         menu = self.menuBar().addMenu("파일")
         for title, shortcut, callback in (

@@ -220,19 +220,40 @@ class MixedUITests(unittest.TestCase):
         seq=self.w.active_sequence();clips=sequence_clips(seq)
         self.assertEqual(clips[1]['at'],0)
         self.assertAlmostEqual(sequence_layout(seq)[1][0]['start'],.2,delta=.01)
-    def test_alt_click_adds_and_toggles_individual_items(self):
+    def test_alt_click_replaces_set_selection_with_one_item(self):
+        c=self.w.timeline.canvas
+        self.click(350,47)
+        self.assertEqual(c.selected_keys,{0,1});self.assertEqual(c.selected_subtitles,{0})
+        for ms,y,keys,subtitles in [(350,47,{0},set()),(350,90,set(),{0}),(350,133,{1},set()),(350,133,{1},set())]:
+            p=(self.x(ms),y);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+            self.assertEqual(c.selected_keys,keys);self.assertEqual(c.selected_subtitles,subtitles)
+            self.assertTrue(c.individual_selection)
+    def test_blank_click_over_existing_cut_stays_cleared(self):
+        c=self.w.timeline.canvas
+        self.click(350,47)
+        self.click(500,165)
+        self.assertFalse(c.selected_keys);self.assertFalse(c.selected_subtitles)
+        self.assertIsNone(c.selected_clip)
+        self.assertAlmostEqual(self.w.preview.timeline_position(),500,delta=20)
+    def test_ruler_seek_preserves_individual_selection(self):
+        c=self.w.timeline.canvas
+        p=(self.x(350),90);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+        self.gesture((self.x(1500),10),(self.x(2500),10))
+        self.assertFalse(c.selected_keys);self.assertEqual(c.selected_subtitles,{0})
+        self.assertTrue(c.individual_selection)
+    def test_ctrl_alt_click_adds_and_toggles_individual_items(self):
         c=self.w.timeline.canvas
         for ms,y in [(500,47),(1350,90),(2500,133)]:
-            p=(self.x(ms),y);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+            p=(self.x(ms),y);self.gesture(p,p,Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.AltModifier)
         self.assertEqual(c.selected_keys,{0,5});self.assertEqual(c.selected_subtitles,{1})
-        p=(self.x(1350),90);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+        p=(self.x(1350),90);self.gesture(p,p,Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.AltModifier)
         self.assertEqual(c.selected_keys,{0,5});self.assertFalse(c.selected_subtitles)
-        p=(self.x(500),47);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+        p=(self.x(500),47);self.gesture(p,p,Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.AltModifier)
         self.assertEqual(c.selected_keys,{5})
     def test_alt_mixed_selection_moves_only_selected_items(self):
         c=self.w.timeline.canvas
         for ms,y in [(500,47),(1350,90),(2500,133)]:
-            p=(self.x(ms),y);self.gesture(p,p,Qt.KeyboardModifier.AltModifier)
+            p=(self.x(ms),y);self.gesture(p,p,Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.AltModifier)
         self.gesture((self.x(500),47),(self.x(1000),47))
         clips=sequence_clips(self.w.active_sequence())
         video=next(r for r in clips if r['track']=='video' and r['group']=='pair-0')

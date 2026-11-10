@@ -173,7 +173,8 @@ class EditSequenceWorkflow:
         selected=canvas.selected_clip is not None and canvas.selected_clip<len(sequence_clips(seq))
         self.timeline.split_button.setEnabled(selected)
         self.timeline.delete_button.setEnabled(selected or bool(canvas.selected_subtitles))
-        self.timeline.hint.setText('빈 곳 드래그: 세트 선택 · Ctrl+클릭: 추가/해제 · Alt+클릭: 개별 · Shift: 뒤 항목 함께 · Ctrl+K: 분할 · Delete: 자리 유지 삭제 · Alt+Backspace: 붙여 삭제 · 끝 근처: 맞춤 · Esc: 해제')
+        self.timeline.hint.setText('빈 곳 클릭: 해제 · 드래그: 세트 선택 · Ctrl+클릭: 추가/해제 · Alt+클릭: 단일 선택 · Esc: 해제')
+        self.timeline.hint.setToolTip('시간 눈금 드래그: 재생 위치 · Ctrl+Alt+클릭: 개별 추가/해제 · Shift: 뒤 항목 함께 · Ctrl+K: 분할 · Delete: 자리 유지 삭제 · Alt+Backspace: 붙여 삭제 · 끝 근처: 맞춤')
         self.timeline.info.setText(f"자막 {len(cues)}개 · {sum(c['track']=='video' for c in sequence_clips(seq))}개 컷")
         self.timeline.update_scroll()
         canvas.update()
@@ -201,7 +202,7 @@ class EditSequenceWorkflow:
                 keys={i for i,c in enumerate(clips) if c['group']==owner and (seq.get('linked',True) or (c['track']=='video' if track=='subtitle' else i==index))}
                 subtitles={i for i,r in enumerate(canvas.segments) if r.get('owner')==owner}
             if track=='subtitle':subtitles.add(index)
-        if canvas.selection_additive or individual:
+        if canvas.selection_additive:
             if already:canvas.selected_keys-=keys;canvas.selected_subtitles-=subtitles
             else:canvas.selected_keys|=keys;canvas.selected_subtitles|=subtitles
             canvas.individual_selection=canvas.individual_selection or individual

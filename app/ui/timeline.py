@@ -63,7 +63,7 @@ class TrackCanvas(QWidget):
         self.navigation = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setMinimumHeight(175)
+        self.setMinimumHeight(189)
         self.setAccessibleName("영상과 자막 타임라인 · 클릭하여 재생 위치 이동")
 
     @property
@@ -469,6 +469,8 @@ class Timeline(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         frame, layout = panel()
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
         outer.addWidget(frame)
         self.sequence_tabs = QTabBar()
         self.sequence_tabs.setObjectName("sequenceTabs")
@@ -557,8 +559,8 @@ class Timeline(QWidget):
         content.addLayout(sidebar)
         self.editing_panel=QWidget()
         track_layout=QVBoxLayout(self.editing_panel)
-        track_layout.setContentsMargins(12,12,12,10)
-        track_layout.setSpacing(10)
+        track_layout.setContentsMargins(8,4,8,4)
+        track_layout.setSpacing(6)
         track_layout.addLayout(editbar)
         track_layout.addWidget(self.canvas)
         content.addWidget(self.editing_panel,1)
@@ -576,6 +578,7 @@ class Timeline(QWidget):
         self.keyboard_border.hide()
         self.zoom.valueChanged.connect(self.set_zoom)
         self.hint = label("시간 눈금 드래그 → 재생 위치 · 빈 곳 클릭 → 위치 이동 · 자막 양 끝 → 시간 조정", "muted")
+        self.hint.setToolTip(self.hint.text())
         layout.addWidget(self.hint)
         self.update_scroll()
 
